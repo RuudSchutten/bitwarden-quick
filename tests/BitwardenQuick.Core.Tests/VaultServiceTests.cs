@@ -21,9 +21,9 @@ public sealed class VaultServiceTests : IDisposable
         string wrappedCipherKey;
         using (var raw = cipherKey.Export()) wrappedCipherKey = _server.UserKey.Encrypt(raw.Span).ToString();
 
-        _server.AddLogin("c1", _server.UserKey, "GitHub", "ruud", "gh-pass", "https://www.github.com/login", favorite: true);
+        _server.AddLogin("c1", _server.UserKey, "GitHub", "ruud", "gh-pass", "https://www.github.example/login", favorite: true);
         _server.AddLogin("c2", cipherKey, "Zoom - Personal", "ruud@example.com", "zoom-pass", "zoom.example", cipherKey: wrappedCipherKey);
-        _server.AddLogin("c3", _server.OrgKey, "Azure Portal", "ruud@contoso.example", "az-pass", "https://portal.azure.com", orgId: FakeBitwarden.OrgId, reprompt: 1);
+        _server.AddLogin("c3", _server.OrgKey, "Azure Portal", "ruud@contoso.example", "az-pass", "https://portal.azure.example", orgId: FakeBitwarden.OrgId, reprompt: 1);
         _server.AddLogin("c4", _server.UserKey, "Deleted", "x", "x", null, deletedDate: DateTime.UtcNow);
         _server.AddLogin("c5", _server.UserKey, "A note", null, null, null, type: 2);
         using (var stranger = SymmetricKey.Generate())
@@ -97,7 +97,7 @@ public sealed class VaultServiceTests : IDisposable
     [Fact]
     public async Task Icon_cache_is_encrypted_with_the_user_key_and_only_readable_while_unlocked()
     {
-        var data = Encoding.UTF8.GetBytes("github.com icon bytes");
+        var data = Encoding.UTF8.GetBytes("github.example icon bytes");
         using (var service = await SetUpService())
         {
             service.SaveIconCache(data);
@@ -108,7 +108,7 @@ public sealed class VaultServiceTests : IDisposable
         }
 
         var stored = ProtectedData.Unprotect(File.ReadAllBytes(Path.Combine(_dir, "icons.dat")), SecureStore.Entropy, DataProtectionScope.CurrentUser);
-        Assert.DoesNotContain("github.com", Encoding.UTF8.GetString(stored));
+        Assert.DoesNotContain("github.example", Encoding.UTF8.GetString(stored));
 
         using var restarted = NewService();
         restarted.LoadAccount();
@@ -149,7 +149,7 @@ public sealed class VaultServiceTests : IDisposable
         Assert.Equal(1, vault.SkippedItems);
 
         var github = vault.Find("c1")!;
-        Assert.Equal("github.com", github.Host);
+        Assert.Equal("github.example", github.Host);
         Assert.Equal("ruud", github.Username);
         Assert.Equal("gh-pass", Password(service, "c1"));
         Assert.Equal("zoom-pass", Password(service, "c2"));

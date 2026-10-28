@@ -13,10 +13,10 @@ public sealed class SearchTests : IDisposable
         _entries =
         [
             Entry("1", "Zoom - Personal", "ruud@example.com", "https://zoom.example"),
-            Entry("2", "Google", "ruud@mail.example", "https://accounts.google.com"),
+            Entry("2", "Google", "ruud@mail.example", "https://accounts.google.example"),
             Entry("3", "My Zoo Tickets", "ruud", "https://tickets.example"),
-            Entry("4", "Azure DevOps", "ruud@contoso.example", "https://dev.azure.com", favorite: true),
-            Entry("5", "GitHub", "ruud", "https://github.com"),
+            Entry("4", "Azure DevOps", "ruud@contoso.example", "https://dev.azure.example", favorite: true),
+            Entry("5", "GitHub", "ruud", "https://github.example"),
         ];
     }
 
@@ -68,9 +68,9 @@ public sealed class SearchTests : IDisposable
     }
 
     [Theory]
-    [InlineData("https://www.github.com/login", "github.com")]
+    [InlineData("https://www.github.example/login", "github.example")]
     [InlineData("zoom.example", "zoom.example")]
-    [InlineData("androidapp://com.foo", "com.foo")]
+    [InlineData("androidapp://com.example.app", "com.example.app")]
     [InlineData("", null)]
     public void Host_extraction(string uri, string? expected) => Assert.Equal(expected, VaultEntry.HostOf(uri));
 

@@ -32,8 +32,8 @@ public sealed class IconClientTests
     [Theory]
     [InlineData("https://login.example.com/common/oauth2", "login.example.com")]
     [InlineData("example.org", "example.org")]
-    [InlineData("  HTTP://WWW.GitHub.com:8443/path  ", "www.github.com")]
-    [InlineData("https://bücher.de", "xn--bcher-kva.de")]
+    [InlineData("  HTTP://WWW.Example.com:8443/path  ", "www.example.com")]
+    [InlineData("https://bücher.example", "xn--bcher-kva.example")]
     [InlineData("https://example.com./", "example.com")]
     public void HostFor_returns_the_ascii_host_of_a_website(string uri, string expected) =>
         Assert.Equal(expected, IconClient.HostFor(uri));
@@ -41,7 +41,7 @@ public sealed class IconClientTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("androidapp://com.microsoft.teams")]
+    [InlineData("androidapp://com.example.app")]
     [InlineData("ftp://files.example.com")]
     [InlineData("https://192.168.1.10/admin")]
     [InlineData("https://[::1]/")]
@@ -70,8 +70,8 @@ public sealed class IconClientTests
         var handler = new FakeIcons(_ => Image([1]));
         using var client = new IconClient(new Uri("https://vault.example.com/icons"), handler);
 
-        await client.GetAsync("github.com");
-        Assert.Equal(new Uri("https://vault.example.com/icons/github.com/icon.png"), Assert.Single(handler.Requests));
+        await client.GetAsync("example.org");
+        Assert.Equal(new Uri("https://vault.example.com/icons/example.org/icon.png"), Assert.Single(handler.Requests));
     }
 
     [Fact]
