@@ -432,6 +432,12 @@ public sealed class VaultService : IDisposable
     private static DateTimeOffset ExpiryOf(TokenResponse token) =>
         DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, token.ExpiresIn - 60));
 
+    public (string Code, int SecondsLeft)? GenerateTotp(string id, DateTimeOffset now)
+    {
+        var entry = _vault?.Find(id);
+        return entry is null ? null : Vault.GenerateTotp(entry, now);
+    }
+
     /// <summary>Reads the icon cache. It is encrypted with the user key, so like the vault it is unreadable while locked.</summary>
     public byte[]? LoadIconCache()
     {

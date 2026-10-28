@@ -14,6 +14,7 @@ public sealed class VaultEntry
     public bool Reprompt { get; init; }
 
     internal EncString? Password { get; init; }
+    internal EncString? Totp { get; init; }
     internal SymmetricKey Key { get; init; } = null!;
 
     internal string NameLower { get; init; } = "";
@@ -22,6 +23,7 @@ public sealed class VaultEntry
     internal string UriLower { get; init; } = "";
 
     public bool HasPassword => Password is not null;
+    public bool HasTotp => Totp is not null;
 
     public string Subtitle => (Username, Host) switch
     {

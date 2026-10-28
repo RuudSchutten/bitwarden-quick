@@ -60,6 +60,7 @@ public sealed class LoginModel
 {
     public string? Username { get; set; }
     public string? Password { get; set; }
+    public string? Totp { get; set; }
     public string? Uri { get; set; }
     public List<LoginUriModel>? Uris { get; set; }
 }

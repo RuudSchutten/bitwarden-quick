@@ -12,6 +12,7 @@ Unofficial; not affiliated with Bitwarden.
 | `↑` / `↓` | Select an item |
 | `Enter` or `Ctrl+Shift+C` | Copy password |
 | `Ctrl+C` | Copy username |
+| `Ctrl+Alt+C` | Copy the one-time password (TOTP) |
 | `Ctrl+Shift+U` | Copy website |
 | `Alt+Enter` | Open the website in your browser |
 | `Shift+Enter` | Auto-Type: type username, Tab, password, Enter into the window you came from |
@@ -64,6 +65,9 @@ for your master password.
 - Auto-Type only types into the window that was in front when you pressed the hotkey, and only once that window
   is in front again. Items with "Master password re-prompt" ask for confirmation first.
 - Open in browser only opens `http` and `https` addresses.
+- One-time passwords are computed on this PC from the item's authenticator key, which is decrypted only for that.
+  Like passwords they are excluded from clipboard history, cleared after 30 seconds, and need confirmation for
+  items with "Master password re-prompt".
 
 ### Limitations
 

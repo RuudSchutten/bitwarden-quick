@@ -57,7 +57,7 @@ internal sealed class FakeBitwarden : HttpMessageHandler
     }
 
     public void AddLogin(string id, SymmetricKey key, string name, string? username, string? password, string? uri,
-        string? orgId = null, string? cipherKey = null, int type = 1, DateTime? deletedDate = null, bool favorite = false, int reprompt = 0)
+        string? orgId = null, string? cipherKey = null, int type = 1, DateTime? deletedDate = null, bool favorite = false, int reprompt = 0, string? totp = null)
     {
         string? E(string? v) => v is null ? null : key.Encrypt(Encoding.UTF8.GetBytes(v)).ToString();
         _ciphers.Add(new
@@ -70,7 +70,7 @@ internal sealed class FakeBitwarden : HttpMessageHandler
             favorite,
             reprompt,
             deletedDate,
-            login = new { username = E(username), password = E(password), uris = uri is null ? null : new[] { new { uri = E(uri), match = (int?)null } } },
+            login = new { username = E(username), password = E(password), totp = E(totp), uris = uri is null ? null : new[] { new { uri = E(uri), match = (int?)null } } },
         });
     }
 

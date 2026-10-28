@@ -60,6 +60,21 @@ public sealed class VaultServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Generates_one_time_passwords_from_the_items_authenticator_key()
+    {
+        _server.AddLogin("t1", _server.UserKey, "With TOTP", "me", "pw", "https://totp.test",
+            totp: "otpauth://totp/x?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8");
+        _server.AddLogin("t2", _server.UserKey, "Broken TOTP", "me", "pw", null, totp: "not a key!");
+        using var service = await SetUpService();
+
+        Assert.True(service.Current!.Find("t1")!.HasTotp);
+        Assert.False(service.Current!.Find("c1")!.HasTotp);
+        Assert.Equal(("94287082", 1), service.GenerateTotp("t1", DateTimeOffset.FromUnixTimeSeconds(59)));
+        Assert.Null(service.GenerateTotp("t2", DateTimeOffset.UtcNow));
+        Assert.Null(service.GenerateTotp("c1", DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
     public async Task Icon_cache_is_encrypted_with_the_user_key_and_only_readable_while_unlocked()
     {
         var data = Encoding.UTF8.GetBytes("github.com icon bytes");

@@ -11,7 +11,7 @@ namespace BitwardenQuick;
 /// </summary>
 internal static class RepromptGate
 {
-    public static async Task<bool> ConfirmAsync(Window owner, string itemName, VaultService service, string verb = "copy")
+    public static async Task<bool> ConfirmAsync(Window owner, string itemName, VaultService service, string action = "copy the password")
     {
         try
         {
@@ -19,7 +19,7 @@ internal static class RepromptGate
             {
                 var hwnd = new WindowInteropHelper(owner).Handle;
                 var result = await UserConsentVerifierInterop.RequestVerificationForWindowAsync(
-                    hwnd, $"Confirm that you want to {verb} the password for \"{itemName}\".");
+                    hwnd, $"Confirm that you want to {action} for \"{itemName}\".");
                 return result == UserConsentVerificationResult.Verified;
             }
         }

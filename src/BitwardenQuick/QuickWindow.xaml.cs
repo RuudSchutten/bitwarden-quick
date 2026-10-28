@@ -125,6 +125,7 @@ public partial class QuickWindow : Window
             new("Copy password", ["Enter"]),
             new("Copy username", ["Ctrl", "C"]),
             new("Copy password", ["Ctrl", "Shift", "C"]),
+            new("Copy one-time password", ["Ctrl", "Alt", "C"]),
             new("Copy website", ["Ctrl", "Shift", "U"]),
             new("Open in browser", ["Alt", "Enter"]),
             new("Auto-Type", ["Shift", "Enter"]),
@@ -320,6 +321,9 @@ public partial class QuickWindow : Window
             case Key.Enter:
                 CopyPassword();
                 break;
+            case Key.C when ctrl && alt:
+                CopyTotp();
+                break;
             case Key.C when ctrl && shift:
                 CopyPassword();
                 break;
@@ -375,6 +379,7 @@ public partial class QuickWindow : Window
         var actions = new List<ActionItem>();
         if (!string.IsNullOrEmpty(entry.Username)) actions.Add(new("Copy username", "Ctrl+C", CopyUsername));
         if (entry.HasPassword) actions.Add(new("Copy password", "Ctrl+Shift+C", CopyPassword));
+        if (entry.HasTotp) actions.Add(new("Copy one-time password", "Ctrl+Alt+C", CopyTotp));
         if (!string.IsNullOrEmpty(entry.Uri)) actions.Add(new("Copy website", "Ctrl+Shift+U", CopyWebsite));
         var firstOpen = actions.Count;
         if (WebUri(entry.Uri) is not null) actions.Add(new("Open in browser", "Alt+Enter", OpenInBrowser));
@@ -440,14 +445,14 @@ public partial class QuickWindow : Window
         return entry;
     }
 
-    private async Task<bool> ConfirmAsync(VaultEntry entry, string verb)
+    private async Task<bool> ConfirmAsync(VaultEntry entry, string action)
     {
         if (!entry.Reprompt) return true;
         _modal = true;
         bool confirmed;
         try
         {
-            confirmed = await RepromptGate.ConfirmAsync(this, entry.Name, _service, verb);
+            confirmed = await RepromptGate.ConfirmAsync(this, entry.Name, _service, action);
         }
         finally
         {
@@ -463,7 +468,7 @@ public partial class QuickWindow : Window
 
     private async void CopyPassword()
     {
-        if (CurrentEntry(needPassword: true) is not { } entry || !await ConfirmAsync(entry, "copy")) return;
+        if (CurrentEntry(needPassword: true) is not { } entry || !await ConfirmAsync(entry, "copy the password")) return;
         try
         {
             using var secret = _service.DecryptPassword(entry.Id);
@@ -482,6 +487,31 @@ public partial class QuickWindow : Window
             {
                 Array.Clear(chars);
             }
+            Done(entry);
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or System.Security.Cryptography.CryptographicException or Win32Exception)
+        {
+            SetStatus(ex is Win32Exception ? ex.Message : "Decryption failed.", error: true);
+        }
+    }
+
+    private async void CopyTotp()
+    {
+        if (CurrentEntry(needPassword: false) is not { } entry) return;
+        if (!entry.HasTotp)
+        {
+            SetStatus("This item has no one-time password.", error: true);
+            return;
+        }
+        if (!await ConfirmAsync(entry, "copy the one-time password")) return;
+        try
+        {
+            if (_service.GenerateTotp(entry.Id, DateTimeOffset.UtcNow) is not { } totp)
+            {
+                SetStatus("The authenticator key of this item is not valid.", error: true);
+                return;
+            }
+            _clipboard.Arm(SecureClipboard.SetText(ClipboardOwner, totp.Code, sensitive: true), _settings.ClipboardClearSeconds);
             Done(entry);
         }
         catch (Exception ex) when (ex is ObjectDisposedException or System.Security.Cryptography.CryptographicException or Win32Exception)
@@ -580,7 +610,7 @@ public partial class QuickWindow : Window
             SetStatus("No window to type into.", error: true);
             return;
         }
-        if (!await ConfirmAsync(entry, "type")) return;
+        if (!await ConfirmAsync(entry, "type the password")) return;
 
         char[]? password = null;
         string? error;

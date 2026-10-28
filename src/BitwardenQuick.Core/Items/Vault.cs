@@ -5,7 +5,7 @@ namespace BitwardenQuick.Core.Items;
 
 /// <summary>
 /// The searchable view of a synced vault. Names, usernames and URIs are decrypted up
-/// front for searching; passwords stay encrypted until <see cref="DecryptPassword"/>.
+/// front for searching; passwords and authenticator keys stay encrypted until they are used.
 /// </summary>
 public sealed class Vault : IDisposable
 {
@@ -117,6 +117,7 @@ public sealed class Vault : IDisposable
             Favorite = cipher.Favorite,
             Reprompt = cipher.Reprompt != 0,
             Password = EncString.ParseOrNull(cipher.Login?.Password),
+            Totp = EncString.ParseOrNull(cipher.Login?.Totp),
             Key = key,
             NameLower = name.ToLowerInvariant(),
             UsernameLower = username?.ToLowerInvariant() ?? "",
@@ -134,6 +135,23 @@ public sealed class Vault : IDisposable
 
     public static Secret? DecryptPassword(VaultEntry entry) =>
         entry.Password is { } enc ? entry.Key.Decrypt(enc) : null;
+
+    /// <summary>The current one-time password, or null when the item has no authenticator key or it is not valid.</summary>
+    public static (string Code, int SecondsLeft)? GenerateTotp(VaultEntry entry, DateTimeOffset now)
+    {
+        if (entry.Totp is not { } enc) return null;
+        using var key = entry.Key.Decrypt(enc);
+        var chars = new char[System.Text.Encoding.UTF8.GetMaxCharCount(key.Length)];
+        try
+        {
+            var length = System.Text.Encoding.UTF8.GetChars(key.Span, chars);
+            return Totp.Generate(chars.AsSpan(0, length), now);
+        }
+        finally
+        {
+            Array.Clear(chars);
+        }
+    }
 
     public void Dispose()
     {
