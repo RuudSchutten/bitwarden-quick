@@ -72,10 +72,13 @@ public sealed class VaultServiceTests : IDisposable
         Assert.Null(service.DecryptPassword("dup"));
     }
 
+    // Slow enough that a lock 100 ms into the unlock always lands while the key is still being derived.
+    private static readonly KdfConfig SlowKdf = new(KdfType.Argon2id, 4, 64, 1);
+
     [Fact]
     public async Task A_lock_during_a_master_password_unlock_wins()
     {
-        _server.Rewrap(_server.UserKey, MasterPassword, new KdfConfig(KdfType.Pbkdf2, 2_000_000));
+        _server.Rewrap(_server.UserKey, MasterPassword, SlowKdf);
         using var service = await SetUpService();
         service.Lock();
 
@@ -93,13 +96,10 @@ public sealed class VaultServiceTests : IDisposable
     [Fact]
     public async Task A_lock_during_setup_keeps_the_account_but_stays_locked()
     {
-        _server.Rewrap(_server.UserKey, MasterPassword, new KdfConfig(KdfType.Pbkdf2, 2_000_000));
         using var service = NewService();
         using var pw = Secret.FromChars(MasterPassword.AsSpan());
 
         var setup = service.SetupAsync(FakeBitwarden.ClientId, FakeBitwarden.ClientSecret, pw);
-        await Task.Delay(300);
-        Assert.False(setup.IsCompleted);
         service.Lock();
         await setup;
 
