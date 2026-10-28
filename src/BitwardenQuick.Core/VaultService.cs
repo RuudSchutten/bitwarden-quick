@@ -40,6 +40,7 @@ public sealed class VaultService : IDisposable
     public Vault? Current => _vault;
     public DateTimeOffset? LastSync { get; private set; }
     public string? LastError { get; private set; }
+    public string? Email => _account?.Email;
 
     /// <summary>The challenge to sign with the Windows Hello key, or null when Hello unlock is not set up.</summary>
     public byte[]? HelloChallenge => _account?.HelloChallenge;
@@ -430,6 +431,32 @@ public sealed class VaultService : IDisposable
 
     private static DateTimeOffset ExpiryOf(TokenResponse token) =>
         DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, token.ExpiresIn - 60));
+
+    /// <summary>Reads the icon cache. It is encrypted with the user key, so like the vault it is unreadable while locked.</summary>
+    public byte[]? LoadIconCache()
+    {
+        lock (_gate)
+        {
+            if (_userKey is not { } key || _store.LoadIcons() is not { } encrypted) return null;
+            try
+            {
+                using var plain = key.Decrypt(encrypted);
+                return plain.Span.ToArray();
+            }
+            catch (CryptographicException)
+            {
+                return null;
+            }
+        }
+    }
+
+    public void SaveIconCache(ReadOnlySpan<byte> data)
+    {
+        lock (_gate)
+        {
+            if (_userKey is { } key) _store.SaveIcons(key.Encrypt(data));
+        }
+    }
 
     public Secret? DecryptPassword(string id)
     {

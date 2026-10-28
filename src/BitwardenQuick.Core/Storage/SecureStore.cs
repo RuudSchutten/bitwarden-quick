@@ -22,7 +22,7 @@ public sealed record AccountInfo(
 public sealed class LegacyAccountException() : Exception("Account file from an older BitwardenQuick version.");
 
 /// <summary>
-/// Persists the account and the encrypted vault cache under %LOCALAPPDATA%, wrapped with DPAPI
+/// Persists the account, the encrypted vault cache and the encrypted icon cache under %LOCALAPPDATA%, wrapped with DPAPI
 /// so only the current Windows user on this machine can read them.
 /// </summary>
 public sealed class SecureStore
@@ -35,6 +35,7 @@ public sealed class SecureStore
     public string Directory { get; }
     private string AccountPath => Path.Combine(Directory, "account.dat");
     private string VaultPath => Path.Combine(Directory, "vault.dat");
+    private string IconsPath => Path.Combine(Directory, "icons.dat");
 
     public SecureStore(string? directory = null)
     {
@@ -141,9 +142,34 @@ public sealed class SecureStore
         }
     }
 
+    /// <summary>Stores the icon cache, already encrypted with the user key, as iv | mac | ciphertext.</summary>
+    public void SaveIcons(EncString encrypted)
+    {
+        var buffer = new byte[16 + 32 + encrypted.Data.Length];
+        encrypted.Iv.CopyTo(buffer, 0);
+        encrypted.Mac.CopyTo(buffer, 16);
+        encrypted.Data.CopyTo(buffer, 48);
+        WriteProtected(IconsPath, buffer);
+    }
+
+    public EncString? LoadIcons()
+    {
+        if (!File.Exists(IconsPath)) return null;
+        try
+        {
+            var plain = ProtectedData.Unprotect(File.ReadAllBytes(IconsPath), Entropy, DataProtectionScope.CurrentUser);
+            if (plain.Length < 48 + 16) return null;
+            return EncString.Authenticated(plain[..16], plain[48..], plain[16..48]);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+    }
+
     public void Wipe()
     {
-        foreach (var path in new[] { AccountPath, VaultPath, AccountPath + ".tmp", VaultPath + ".tmp" })
+        foreach (var path in new[] { AccountPath, VaultPath, IconsPath, AccountPath + ".tmp", VaultPath + ".tmp", IconsPath + ".tmp" })
         {
             if (!File.Exists(path)) continue;
             var length = new FileInfo(path).Length;

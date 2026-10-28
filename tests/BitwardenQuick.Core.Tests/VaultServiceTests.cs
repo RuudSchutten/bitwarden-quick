@@ -60,6 +60,31 @@ public sealed class VaultServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Icon_cache_is_encrypted_with_the_user_key_and_only_readable_while_unlocked()
+    {
+        var data = Encoding.UTF8.GetBytes("github.com icon bytes");
+        using (var service = await SetUpService())
+        {
+            service.SaveIconCache(data);
+            Assert.Equal(data, service.LoadIconCache());
+            service.Lock();
+            Assert.Null(service.LoadIconCache());
+            service.SaveIconCache([1, 2, 3]);
+        }
+
+        var stored = ProtectedData.Unprotect(File.ReadAllBytes(Path.Combine(_dir, "icons.dat")), SecureStore.Entropy, DataProtectionScope.CurrentUser);
+        Assert.DoesNotContain("github.com", Encoding.UTF8.GetString(stored));
+
+        using var restarted = NewService();
+        restarted.LoadAccount();
+        Assert.True(Unlock(restarted, MasterPassword));
+        Assert.Equal(data, restarted.LoadIconCache());
+
+        restarted.SignOut();
+        Assert.False(File.Exists(Path.Combine(_dir, "icons.dat")));
+    }
+
+    [Fact]
     public async Task Setup_rejects_wrong_master_password_and_stores_nothing()
     {
         using var service = NewService();

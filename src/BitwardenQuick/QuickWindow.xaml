@@ -12,18 +12,91 @@
                       CornerRadius="0" UseAeroCaptionButtons="False" NonClientFrameEdges="None" />
     </WindowChrome.WindowChrome>
 
+    <Window.Resources>
+        <Style x:Key="RowStyle" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" CornerRadius="6" Padding="10,6" Margin="0,1" Background="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SelectionBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ActionRowStyle" TargetType="ListBoxItem" BasedOn="{StaticResource RowStyle}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <StackPanel>
+                            <Border Height="1" Margin="4,5" Background="{DynamicResource DividerBrush}"
+                                    Visibility="{Binding DividerVisibility}" />
+                            <Border x:Name="Bd" CornerRadius="6" Padding="12,8" Background="Transparent">
+                                <ContentPresenter />
+                            </Border>
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger SourceName="Bd" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SelectionBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Control}}" />
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="6" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Border Background="{DynamicResource SurfaceBrush}">
         <StackPanel>
-            <Border Margin="12,12,12,8" CornerRadius="8" Background="{DynamicResource InputBrush}"
+            <Border Margin="12,12,12,10" CornerRadius="8" Background="{DynamicResource InputBrush}"
                     BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
-                <Grid Height="42" Margin="12,0,10,0">
+                <Grid Height="42" Margin="12,0,6,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="16"
-                               Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                               Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
                     <TextBlock x:Name="Placeholder" Grid.Column="1" Text="Search Bitwarden" FontSize="17"
                                Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="2,0,0,0"
                                IsHitTestVisible="False" />
@@ -31,97 +104,187 @@
                              Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}"
                              VerticalContentAlignment="Center" TextChanged="OnSearchChanged"
                              SelectionBrush="{DynamicResource AccentBrush}" />
-                    <TextBlock x:Name="SyncIcon" Grid.Column="2" Text="&#xE895;" FontFamily="{StaticResource IconFont}"
+                    <Button x:Name="ClearButton" Grid.Column="2" Style="{StaticResource IconButton}" Click="OnClearClick"
+                            Visibility="Collapsed" ToolTip="Clear search">
+                        <Border Width="18" Height="18" CornerRadius="9" Background="{DynamicResource MutedBrush}">
+                            <TextBlock Text="&#xE711;" FontFamily="{StaticResource IconFont}" FontSize="9" FontWeight="Bold"
+                                       Foreground="{DynamicResource InputBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </Button>
+                    <TextBlock x:Name="SyncIcon" Grid.Column="3" Text="&#xE895;" FontFamily="{StaticResource IconFont}"
                                FontSize="14" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"
-                               Margin="8,0,0,0" Visibility="Collapsed" ToolTip="Syncing…" />
+                               Margin="6,0,6,0" Visibility="Collapsed" ToolTip="Syncing…" />
                 </Grid>
             </Border>
 
             <ListBox x:Name="Results" MaxHeight="430" Margin="8,0,8,8" BorderThickness="0" Background="Transparent"
-                     Focusable="False" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     Focusable="False" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                     VirtualizingPanel.ScrollUnit="Pixel" MouseDoubleClick="OnResultDoubleClick">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="Focusable" Value="False" />
-                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ListBoxItem">
-                                    <Border x:Name="Bd" CornerRadius="6" Padding="10,7" Margin="0,1" Background="Transparent">
-                                        <ContentPresenter />
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource HoverBrush}" />
-                                        </Trigger>
-                                        <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SelectionBrush}" />
-                                            <Setter Property="Foreground" Value="White" />
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </ListBox.ItemContainerStyle>
+                     VirtualizingPanel.ScrollUnit="Pixel" MouseDoubleClick="OnResultDoubleClick"
+                     ItemContainerStyle="{StaticResource RowStyle}">
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type local:ResultItem}">
-                        <Grid DataContextChanged="OnResultRealized">
+                        <Grid MinHeight="28">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Border Width="32" Height="32" CornerRadius="7" Background="{Binding Avatar}" Margin="0,0,12,0"
-                                    Visibility="{Binding InitialVisibility}">
-                                <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="15" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <Border Width="32" Height="32" CornerRadius="7" Background="{DynamicResource IconTileBrush}"
-                                    BorderBrush="{DynamicResource KeyBorderBrush}" BorderThickness="1" Margin="0,0,12,0"
-                                    Visibility="{Binding IconVisibility}">
-                                <Image Source="{Binding Icon}" Width="20" Height="20" Stretch="Uniform"
-                                       RenderOptions.BitmapScalingMode="HighQuality" />
-                            </Border>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.72" TextTrimming="CharacterEllipsis"
-                                           Visibility="{Binding SubtitleVisibility}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
-                                <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12" Opacity="0.75"
-                                           VerticalAlignment="Center" Margin="0,0,8,0" Visibility="{Binding RepromptVisibility}"
-                                           ToolTip="Requires confirmation" />
-                                <Border CornerRadius="4" Padding="6,1" BorderThickness="1" BorderBrush="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
-                                        Opacity="0.6" Visibility="{Binding OrganizationVisibility}" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Organization}" FontSize="11" />
+                            <Grid Width="24" Height="24" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Border CornerRadius="5" Background="{Binding Avatar}" Visibility="{Binding InitialVisibility}">
+                                    <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="12" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
-                            </StackPanel>
+                                <Border CornerRadius="5" Padding="3" Background="{DynamicResource IconTileBrush}"
+                                        Visibility="{Binding IconVisibility}">
+                                    <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Border>
+                            </Grid>
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" MaxWidth="320"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding Details}" FontSize="14" Opacity="0.7"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="3" Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                       Opacity="0.75" VerticalAlignment="Center" Margin="10,0,0,0"
+                                       Visibility="{Binding RepromptVisibility}" ToolTip="Requires confirmation" />
+                            <TextBlock x:Name="Primary" Grid.Column="4" Text="{Binding PrimaryAction}" FontSize="14"
+                                       FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0,4,0" Visibility="Collapsed" />
+                            <Button x:Name="More" Grid.Column="5" Style="{StaticResource IconButton}" Margin="4,-4,-6,-4"
+                                    Click="OnMoreClick" Visibility="Collapsed" ToolTip="More actions (→)">
+                                <TextBlock Text="&#xE712;" FontFamily="{StaticResource IconFont}" FontSize="14">
+                                    <TextBlock.LayoutTransform>
+                                        <RotateTransform Angle="90" />
+                                    </TextBlock.LayoutTransform>
+                                </TextBlock>
+                            </Button>
                         </Grid>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                <Setter TargetName="Primary" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="More" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <TextBlock x:Name="EmptyText" Margin="24,6,24,18" FontSize="13" Foreground="{DynamicResource MutedBrush}"
+            <TextBlock x:Name="EmptyText" Margin="24,0,24,16" FontSize="13" Foreground="{DynamicResource MutedBrush}"
                        TextWrapping="Wrap" Visibility="Collapsed" />
+
+            <StackPanel x:Name="ActionsPanel" Visibility="Collapsed">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,1" Padding="20,12,12,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid Width="44" Height="44" Margin="0,0,14,0" VerticalAlignment="Center">
+                            <Border CornerRadius="9" Background="{Binding Avatar}" Visibility="{Binding InitialVisibility}">
+                                <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="20" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Border CornerRadius="9" Padding="7" Background="{DynamicResource IconTileBrush}"
+                                    Visibility="{Binding IconVisibility}">
+                                <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" />
+                            </Border>
+                        </Grid>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Summary}" FontSize="13" Foreground="{DynamicResource MutedBrush}"
+                                       TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                        </StackPanel>
+                        <Button Grid.Column="2" Style="{StaticResource IconButton}" Click="OnCloseActionsClick"
+                                VerticalAlignment="Center" Margin="8,0,0,0" ToolTip="Back (Esc)">
+                            <TextBlock Text="&#xE711;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                       Foreground="{DynamicResource MutedBrush}" />
+                        </Button>
+                    </Grid>
+                </Border>
+                <ListBox x:Name="ActionList" Margin="8,6,8,8" BorderThickness="0" Background="Transparent" Focusable="False"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ItemContainerStyle="{StaticResource ActionRowStyle}"
+                         PreviewMouseLeftButtonUp="OnActionClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:ActionItem}">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Shortcut}" FontSize="13" Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Label}" FontSize="14" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+
+            <StackPanel x:Name="ShortcutsPanel" Visibility="Collapsed">
+                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="22,12,22,4">
+                    <TextBlock Text="Keyboard shortcuts" FontSize="14" FontWeight="SemiBold" />
+                </Border>
+                <ItemsControl x:Name="ShortcutList" Margin="22,4,22,12" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:ShortcutInfo}">
+                            <DockPanel Margin="0,4">
+                                <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Keys}" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource KeyCap}">
+                                                <TextBlock Style="{StaticResource KeyText}" Text="{Binding}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
 
             <Border Background="{DynamicResource FooterBrush}" BorderBrush="{DynamicResource DividerBrush}"
                     BorderThickness="0,1,0,0" Padding="14,9">
                 <DockPanel LastChildFill="False">
-                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Enter" /></Border>
-                        <TextBlock Style="{StaticResource HintText}" Text="Password" />
-                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Ctrl" /></Border>
-                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="C" /></Border>
-                        <TextBlock Style="{StaticResource HintText}" Text="Username" />
+                    <TextBlock x:Name="StatusText" DockPanel.Dock="Right" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="180" />
+
+                    <StackPanel x:Name="IdleHints" Orientation="Horizontal" DockPanel.Dock="Left">
+                        <StackPanel x:Name="HotkeyCaps" Orientation="Horizontal" />
+                        <TextBlock Style="{StaticResource HintText}" Text="Show BitwardenQuick" />
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Ctrl" /></Border>
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Shift" /></Border>
-                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="U" /></Border>
-                        <TextBlock Style="{StaticResource HintText}" Text="Website" />
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="/" /></Border>
+                        <TextBlock Style="{StaticResource HintText}" Text="Keyboard shortcuts" />
                     </StackPanel>
-                    <TextBlock x:Name="StatusText" DockPanel.Dock="Right" FontSize="12" VerticalAlignment="Center"
-                               Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="200" />
+
+                    <StackPanel x:Name="ResultHints" Orientation="Horizontal" DockPanel.Dock="Left" Visibility="Collapsed">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Ctrl" /></Border>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="C" /></Border>
+                        <TextBlock Style="{StaticResource HintText}" Text="Copy username" />
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Ctrl" /></Border>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Shift" /></Border>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="C" /></Border>
+                        <TextBlock Style="{StaticResource HintText}" Text="Copy password" />
+                        <Border Style="{StaticResource KeyCap}">
+                            <TextBlock Style="{StaticResource KeyText}" Text="&#xE72A;" FontFamily="{StaticResource IconFont}" FontSize="10" />
+                        </Border>
+                        <TextBlock Style="{StaticResource HintText}" Text="More actions" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="LocatedIn" Orientation="Horizontal" DockPanel.Dock="Left" Visibility="Collapsed">
+                        <TextBlock Text="Located in" FontSize="12" Foreground="{DynamicResource MutedBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <TextBlock x:Name="LocatedInIcon" FontFamily="{StaticResource IconFont}" FontSize="13"
+                                   Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock x:Name="LocatedInText" FontSize="12" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="360" />
+                    </StackPanel>
                 </DockPanel>
             </Border>
         </StackPanel>

@@ -49,11 +49,13 @@ public partial class App : Application
 
         BitwardenApi api;
         IconClient iconClient;
+        Uri webVault;
         try
         {
             var server = Environment.GetEnvironmentVariable("BITWARDENQUICK_SERVER");
             api = CreateApi(server);
             iconClient = CreateIconClient(server);
+            webVault = string.IsNullOrWhiteSpace(server) ? new Uri("https://vault.bitwarden.com/") : new Uri(server.TrimEnd('/') + "/");
         }
         catch (Exception ex) when (ex is ArgumentException or UriFormatException)
         {
@@ -72,8 +74,8 @@ public partial class App : Application
 
         _hotKey = new HotKey();
         _clipboard = new ClipboardGuard(() => _hotKey.Handle);
-        _icons = new IconCache(iconClient) { Enabled = _settings.ShowWebsiteIcons };
-        _quick = new QuickWindow(_service, _settings, _clipboard, _icons);
+        _icons = new IconCache(iconClient, _service) { Enabled = _settings.ShowWebsiteIcons };
+        _quick = new QuickWindow(_service, _settings, _clipboard, _icons, webVault);
         _quick.SetupRequested += () => ShowSetup(null);
         _quick.SyncRequested += () => _ = SyncAsync(force: false);
         _quick.Prewarm();
@@ -171,6 +173,7 @@ public partial class App : Application
             _setup.Activate();
             return;
         }
+        _quick?.RememberTarget();
         if (_service is { IsConfigured: true, IsUnlocked: false, NeedsSetup: false } && !await UnlockAsync()) return;
         _quick?.ShowQuick();
     }
@@ -223,8 +226,8 @@ public partial class App : Application
         if (_service is not { IsUnlocked: true }) return;
         _clipboard?.ClearNow();
         _quick?.Hide();
+        _icons?.Lock();
         _service.Lock();
-        _icons?.Clear();
     }
 
     private void ShowSetup(string? reason)

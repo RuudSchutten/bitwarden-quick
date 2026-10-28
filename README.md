@@ -13,6 +13,11 @@ Unofficial; not affiliated with Bitwarden.
 | `Enter` or `Ctrl+Shift+C` | Copy password |
 | `Ctrl+C` | Copy username |
 | `Ctrl+Shift+U` | Copy website |
+| `Alt+Enter` | Open the website in your browser |
+| `Shift+Enter` | Auto-Type: type username, Tab, password, Enter into the window you came from |
+| `Ctrl+Shift+O` | Open the item in the Bitwarden web vault |
+| `→` | More actions for the selected item (`Esc` or `←` goes back) |
+| `Ctrl+Shift+/` or `F1` | Keyboard shortcuts |
 | `Esc` | Close |
 
 Run `publish\BitwardenQuick.exe`. On first start BitwardenQuick asks for your personal API key
@@ -54,7 +59,11 @@ for your master password.
 - Website icons come from Bitwarden's icon service (`icons.bitwarden.net`, or `/icons` on a self-hosted server),
   like in Bitwarden's own apps. That service sees the host names of your logins, never other item data. Addresses
   on a local network (IP addresses, `localhost`, `.local`, `.lan`, `.internal`, names without a dot) are not sent.
-  Icons are kept in memory only and are dropped when BitwardenQuick locks.
+  Icons are only fetched for results on screen, and are kept as 48-pixel PNGs (a few KB each) in `icons.dat`,
+  encrypted with your user key like the vault. They are refreshed after 30 days, missing icons after 7.
+- Auto-Type only types into the window that was in front when you pressed the hotkey, and only once that window
+  is in front again. Items with "Master password re-prompt" ask for confirmation first.
+- Open in browser only opens `http` and `https` addresses.
 
 ### Limitations
 

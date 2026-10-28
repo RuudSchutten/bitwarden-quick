@@ -29,6 +29,9 @@ public sealed class EncString
         Mac = mac;
     }
 
+    internal static EncString Authenticated(byte[] iv, byte[] data, byte[] mac) =>
+        new(EncType.AesCbc256_HmacSha256_B64, iv, data, mac);
+
     public bool IsSymmetric => Type is EncType.AesCbc256_B64 or EncType.AesCbc256_HmacSha256_B64;
 
     public static EncString? ParseOrNull(string? value) =>
