@@ -19,6 +19,9 @@ internal static partial class Win32
     public struct POINT { public int X, Y; }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -122,6 +125,24 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool DestroyIcon(nint hIcon);
+
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowW", StringMarshalling = StringMarshalling.Utf16)]
+    public static partial nint FindWindow(string? lpClassName, string? lpWindowName);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+    public static TimeSpan IdleTime
+    {
+        get
+        {
+            var info = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+            return GetLastInputInfo(ref info)
+                ? TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - info.dwTime))
+                : TimeSpan.Zero;
+        }
+    }
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetWindowAttribute(nint hwnd, int attr, ref int attrValue, int attrSize);

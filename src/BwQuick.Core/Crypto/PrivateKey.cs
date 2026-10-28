@@ -50,6 +50,7 @@ public sealed class PrivateKey : IDisposable
     public SymmetricKey DecryptKey(EncString enc)
     {
         using var plain = Decrypt(enc);
+        if (plain.Length != 64) throw new CryptographicException("Decrypted key has an unexpected length.");
         return new SymmetricKey(plain.Span);
     }
 

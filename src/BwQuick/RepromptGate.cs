@@ -27,6 +27,8 @@ internal static class RepromptGate
         {
         }
 
-        return PasswordPromptWindow.Ask(owner, itemName, service);
+        return PasswordPromptWindow.Ask(owner, "Confirm",
+            $"\"{itemName}\" requires your master password. Windows Hello is not set up on this PC.",
+            "Confirm", service.VerifyMasterPassword);
     }
 }

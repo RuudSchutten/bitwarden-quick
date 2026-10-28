@@ -6,6 +6,7 @@ using BwQuick.Core.Api;
 using BwQuick.Core.Storage;
 using BwQuick.Native;
 using Microsoft.Win32;
+using Windows.Security.Credentials;
 
 namespace BwQuick;
 
@@ -25,6 +26,8 @@ public partial class App : Application
     private SetupWindow? _setup;
     private ClipboardGuard? _clipboard;
     private DispatcherTimer? _syncTimer;
+    private DispatcherTimer? _idleTimer;
+    private bool _unlocking;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -43,9 +46,23 @@ public partial class App : Application
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal,
             (_, _) => Dispatcher.BeginInvoke(ShowQuick), null, Timeout.Infinite, executeOnlyOnce: false);
 
+        BitwardenApi api;
+        try
+        {
+            api = CreateApi(Environment.GetEnvironmentVariable("BWQUICK_SERVER"));
+        }
+        catch (Exception ex) when (ex is ArgumentException or UriFormatException)
+        {
+            MessageBox.Show($"BWQUICK_SERVER is not a valid https URL. {ex.Message}", "BwQuick", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+            return;
+        }
+
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => _clipboard?.ClearAfterCrash();
+
         var store = new SecureStore(Environment.GetEnvironmentVariable("BWQUICK_DATA_DIR"));
         _settings = AppSettings.Load(store.Directory);
-        _service = new VaultService(store, CreateApi(Environment.GetEnvironmentVariable("BWQUICK_SERVER")));
+        _service = new VaultService(store, api);
         _service.Changed += () => Dispatcher.BeginInvoke(OnVaultChanged);
 
         _hotKey = new HotKey();
@@ -59,6 +76,7 @@ public partial class App : Application
         _tray.SetHotkeyLabel(_settings.Hotkey);
         _tray.OpenRequested += ShowQuick;
         _tray.SyncRequested += () => _ = SyncAsync(force: true);
+        _tray.LockRequested += Lock;
         _tray.SignOutRequested += SignOut;
         _tray.ExitRequested += () => Shutdown();
 
@@ -70,11 +88,20 @@ public partial class App : Application
         _syncTimer.Tick += (_, _) => _ = SyncAsync(force: false);
         _syncTimer.Start();
 
+        _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _idleTimer.Tick += (_, _) =>
+        {
+            if (_settings.LockAfterIdleMinutes > 0 && Win32.IdleTime >= TimeSpan.FromMinutes(_settings.LockAfterIdleMinutes))
+                Lock();
+        };
+        _idleTimer.Start();
+
         SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        SystemEvents.SessionSwitch += OnSessionSwitch;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
 
         var background = e.Args.Contains("--background", StringComparer.OrdinalIgnoreCase);
-        if (!_service.IsConfigured)
+        if (!_service.HasStoredAccount)
         {
             ShowSetup(null);
             return;
@@ -82,7 +109,12 @@ public partial class App : Application
 
         try
         {
-            _service.UnlockFromDisk();
+            _service.LoadAccount();
+        }
+        catch (SetupException ex)
+        {
+            ShowSetup(ex.Message);
+            return;
         }
         catch (Exception ex) when (ex is CryptographicException or System.IO.IOException or System.IO.InvalidDataException)
         {
@@ -91,7 +123,6 @@ public partial class App : Application
         }
 
         OnVaultChanged();
-        _ = SyncAsync(force: false);
         if (!background) ShowQuick();
     }
 
@@ -103,14 +134,66 @@ public partial class App : Application
         return new BitwardenApi(new Uri(root + "/identity/"), new Uri(root + "/api/"));
     }
 
-    private void ShowQuick()
+    private async void ShowQuick()
     {
         if (_setup is not null)
         {
             _setup.Activate();
             return;
         }
+        if (_service is { IsConfigured: true, IsUnlocked: false, NeedsSetup: false } && !await UnlockAsync()) return;
         _quick?.ShowQuick();
+    }
+
+    /// <summary>Unlocks with Windows Hello, and with the master password when Hello is unavailable or fails.</summary>
+    private async Task<bool> UnlockAsync()
+    {
+        var service = _service!;
+        if (_unlocking) return false;
+        _unlocking = true;
+        try
+        {
+            var enroll = service.HelloChallenge is null;
+            if (service.HelloChallenge is { } challenge)
+            {
+                var (status, signature) = await WindowsHello.SignAsync(challenge);
+                if (signature is not null && await Task.Run(() => service.UnlockWithHello(signature))) return true;
+                if (status == KeyCredentialStatus.UserCanceled) return false;
+                enroll = true;
+            }
+
+            if (!PasswordPromptWindow.Ask(null, "Unlock BwQuick", "Enter your master password to unlock your vault.",
+                    "Unlock", service.UnlockWithMasterPassword))
+                return false;
+            if (enroll) await EnrollHelloAsync();
+            return true;
+        }
+        finally
+        {
+            _unlocking = false;
+        }
+    }
+
+    private async Task EnrollHelloAsync()
+    {
+        if (!await WindowsHello.IsAvailableAsync()) return;
+        var challenge = VaultService.NewHelloChallenge();
+        if (await WindowsHello.CreateAndSignAsync(challenge) is not { } signature) return;
+        try
+        {
+            _service!.EnableHello(challenge, signature);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private void Lock()
+    {
+        if (_service is not { IsUnlocked: true }) return;
+        _clipboard?.ClearNow();
+        _quick?.Hide();
+        _service.Lock();
     }
 
     private void ShowSetup(string? reason)
@@ -123,10 +206,11 @@ public partial class App : Application
         _quick?.Hide();
         _setup = new SetupWindow(_service!, reason);
         _setup.SourceInitialized += (_, _) => WindowEffects.ApplyFluent(_setup, Theme.IsDark, acrylic: false);
-        _setup.Completed += () =>
+        _setup.Completed += async () =>
         {
+            await EnrollHelloAsync();
             _tray?.Notify("BwQuick is ready", $"Press {_settings!.Hotkey} to search your vault.");
-            Dispatcher.BeginInvoke(() => _quick?.ShowQuick(), DispatcherPriority.Background);
+            _ = Dispatcher.BeginInvoke(() => _quick?.ShowQuick(), DispatcherPriority.Background);
         };
         _setup.Closed += (_, _) => _setup = null;
         _setup.Show();
@@ -153,7 +237,9 @@ public partial class App : Application
     {
         _quick?.OnVaultChanged();
         var count = _service?.Current?.Entries.Count ?? 0;
-        _tray?.SetStatus(_service?.LastError is { } error ? $"BwQuick – {error}" : $"BwQuick – {count} items");
+        _tray?.SetStatus(_service is { IsConfigured: true, IsUnlocked: false } ? "BwQuick – Locked"
+            : _service?.LastError is { } error ? $"BwQuick – {error}"
+            : $"BwQuick – {count} items");
     }
 
     private void SignOut()
@@ -165,6 +251,7 @@ public partial class App : Application
 
         _clipboard?.ClearNow();
         _service?.SignOut();
+        _ = WindowsHello.DeleteAsync();
         _settings!.Recent.Clear();
         _settings.Save();
         ShowSetup(null);
@@ -172,8 +259,16 @@ public partial class App : Application
 
     private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
     {
-        if (e.Mode == PowerModes.Resume)
+        if (e.Mode == PowerModes.Suspend)
+            Dispatcher.Invoke(Lock);
+        else if (e.Mode == PowerModes.Resume)
             Dispatcher.BeginInvoke(() => _ = SyncAsync(force: false));
+    }
+
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason is SessionSwitchReason.SessionLock or SessionSwitchReason.ConsoleDisconnect or SessionSwitchReason.RemoteDisconnect)
+            Dispatcher.Invoke(Lock);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
@@ -185,6 +280,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _clipboard?.ClearNow();
         _showWait?.Unregister(null);

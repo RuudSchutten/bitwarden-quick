@@ -140,6 +140,14 @@ public class CryptoVectorTests
     }
 
     [Fact]
+    public void Unwrapped_keys_must_be_64_bytes()
+    {
+        using var key = SymmetricKey.Generate();
+        var wrapped = key.Encrypt(new byte[32]);
+        Assert.Throws<CryptographicException>(() => key.DecryptKey(wrapped));
+    }
+
+    [Fact]
     public void Secret_zeroes_on_dispose()
     {
         var secret = Secret.FromChars("secret".AsSpan());

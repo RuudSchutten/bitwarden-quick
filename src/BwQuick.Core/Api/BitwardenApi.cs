@@ -26,6 +26,8 @@ public sealed class BitwardenApi : IDisposable
     {
         _identity = identity ?? new Uri("https://identity.bitwarden.com/");
         _api = api ?? new Uri("https://api.bitwarden.com/");
+        if (_identity.Scheme != Uri.UriSchemeHttps || _api.Scheme != Uri.UriSchemeHttps)
+            throw new ArgumentException("Bitwarden server URLs must use https.");
         _http = new HttpClient(handler ?? new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
@@ -39,6 +41,8 @@ public sealed class BitwardenApi : IDisposable
         _http.DefaultRequestHeaders.Add("Bitwarden-Client-Name", ClientName);
         _http.DefaultRequestHeaders.Add("Bitwarden-Client-Version", ClientVersion);
     }
+
+    public string Server => _identity.AbsoluteUri;
 
     public async Task<TokenResponse> LoginAsync(ApiCredentials credentials, CancellationToken ct = default)
     {

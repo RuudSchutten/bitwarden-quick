@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using BwQuick.Core.Api;
 using BwQuick.Core.Crypto;
@@ -29,8 +30,28 @@ public sealed class VaultServiceTests : IDisposable
             _server.AddLogin("c6", stranger, "Corrupt", "x", "x", null);
     }
 
-    private VaultService NewService() =>
-        new(new SecureStore(_dir), new BitwardenApi(new Uri("https://identity.test/"), new Uri("https://api.test/"), _server));
+    private VaultService NewService(string identity = "https://identity.test/") =>
+        new(new SecureStore(_dir), new BitwardenApi(new Uri(identity), new Uri("https://api.test/"), _server));
+
+    private async Task<VaultService> SetUpService()
+    {
+        var service = NewService();
+        using var pw = Secret.FromChars(MasterPassword.AsSpan());
+        await service.SetupAsync(FakeBitwarden.ClientId, FakeBitwarden.ClientSecret, pw);
+        return service;
+    }
+
+    private static bool Unlock(VaultService service, string password)
+    {
+        using var pw = Secret.FromChars(password.AsSpan());
+        return service.UnlockWithMasterPassword(pw);
+    }
+
+    private static bool Verify(VaultService service, string password)
+    {
+        using var pw = Secret.FromChars(password.AsSpan());
+        return service.VerifyMasterPassword(pw);
+    }
 
     private static string Password(VaultService service, string id)
     {
@@ -84,22 +105,126 @@ public sealed class VaultServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Restart_unlocks_from_disk_without_network_or_master_password()
+    public async Task Restart_stays_locked_until_the_master_password_unlocks_it_offline()
     {
-        using (var first = NewService())
-        using (var pw = Secret.FromChars(MasterPassword.AsSpan()))
-            await first.SetupAsync(FakeBitwarden.ClientId, FakeBitwarden.ClientSecret, pw);
+        (await SetUpService()).Dispose();
 
         _server.Offline = true;
         using var second = NewService();
+        Assert.True(second.HasStoredAccount);
+        second.LoadAccount();
         Assert.True(second.IsConfigured);
-        second.UnlockFromDisk();
+        Assert.False(second.IsUnlocked);
+        Assert.Null(second.Current);
+        Assert.Null(second.DecryptPassword("c1"));
+
+        Assert.False(Unlock(second, "nope"));
+        Assert.False(second.IsUnlocked);
+        Assert.True(Unlock(second, MasterPassword));
         Assert.Equal(3, second.Current!.Entries.Count);
         Assert.Equal("gh-pass", Password(second, "c1"));
 
         await second.SyncAsync();
         Assert.NotNull(second.LastError);
         Assert.Equal(3, second.Current!.Entries.Count);
+    }
+
+    [Fact]
+    public async Task Windows_Hello_signature_unlocks_and_a_different_one_does_not()
+    {
+        var signature = RandomNumberGenerator.GetBytes(256);
+        using (var first = await SetUpService())
+        {
+            Assert.Null(first.HelloChallenge);
+            first.EnableHello(VaultService.NewHelloChallenge(), signature);
+        }
+
+        using var second = NewService();
+        second.LoadAccount();
+        Assert.NotNull(second.HelloChallenge);
+        Assert.False(second.UnlockWithHello(RandomNumberGenerator.GetBytes(256)));
+        Assert.False(second.IsUnlocked);
+        Assert.True(second.UnlockWithHello(signature));
+        Assert.Equal("gh-pass", Password(second, "c1"));
+    }
+
+    [Fact]
+    public async Task Lock_forgets_the_vault_and_stops_syncing()
+    {
+        using var service = await SetUpService();
+        service.Lock();
+
+        Assert.False(service.IsUnlocked);
+        Assert.Null(service.Current);
+        Assert.Null(service.DecryptPassword("c1"));
+        Assert.False(Verify(service, MasterPassword));
+
+        var tokenCalls = _server.TokenCalls;
+        _server.Revision++;
+        await service.SyncAsync(force: true);
+        Assert.Equal(tokenCalls, _server.TokenCalls);
+        Assert.Equal(1, _server.SyncCalls);
+
+        Assert.True(Unlock(service, MasterPassword));
+        Assert.Equal("gh-pass", Password(service, "c1"));
+    }
+
+    [Fact]
+    public async Task Reprompt_rejects_a_password_for_a_key_the_server_swapped_in()
+    {
+        using var service = await SetUpService();
+        using var forged = SymmetricKey.Generate();
+        _server.Rewrap(forged, "attacker", new KdfConfig(KdfType.Pbkdf2, 5000));
+        _server.Revision++;
+        await service.SyncAsync();
+
+        Assert.Null(service.LastError);
+        Assert.False(Verify(service, "attacker"));
+    }
+
+    [Fact]
+    public async Task Master_password_and_kdf_changes_are_picked_up_on_sync()
+    {
+        using (var service = await SetUpService())
+        {
+            _server.Rewrap(_server.UserKey, "New password 2!", new KdfConfig(KdfType.Argon2id, 3, 16, 2));
+            _server.Revision++;
+            await service.SyncAsync();
+
+            Assert.Null(service.LastError);
+            Assert.True(Verify(service, "New password 2!"));
+            Assert.False(Verify(service, MasterPassword));
+        }
+
+        using var restarted = NewService();
+        restarted.LoadAccount();
+        Assert.True(Unlock(restarted, "New password 2!"));
+    }
+
+    [Fact]
+    public async Task Account_from_another_server_is_not_used()
+    {
+        (await SetUpService()).Dispose();
+        using var other = NewService("https://evil.test/");
+        await Assert.ThrowsAsync<SetupException>(() => Task.Run(other.LoadAccount));
+    }
+
+    [Fact]
+    public void Old_account_file_with_a_raw_key_is_deleted()
+    {
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, "account.dat");
+        File.WriteAllBytes(path, ProtectedData.Protect(BitConverter.GetBytes(1), SecureStore.Entropy, DataProtectionScope.CurrentUser));
+
+        using var service = NewService();
+        Assert.Throws<SetupException>(service.LoadAccount);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void Plain_http_servers_are_refused()
+    {
+        Assert.Throws<ArgumentException>(() => new BitwardenApi(new Uri("http://identity.test/"), new Uri("https://api.test/")));
     }
 
     [Fact]
@@ -134,6 +259,11 @@ public sealed class VaultServiceTests : IDisposable
             foreach (var needle in new[] { "gh-pass", "GitHub", FakeBitwarden.ClientSecret, MasterPassword, "Example.com", "sync" })
                 Assert.DoesNotContain(needle, text, StringComparison.OrdinalIgnoreCase);
         }
+
+        var account = Encoding.Latin1.GetString(ProtectedData.Unprotect(
+            File.ReadAllBytes(Path.Combine(_dir, "account.dat")), SecureStore.Entropy, DataProtectionScope.CurrentUser));
+        Assert.DoesNotContain(FakeBitwarden.ClientSecret, account);
+        Assert.DoesNotContain(MasterPassword, account);
 
         service.SignOut();
         Assert.Empty(Directory.GetFiles(_dir));

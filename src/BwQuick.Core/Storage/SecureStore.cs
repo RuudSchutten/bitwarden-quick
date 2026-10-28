@@ -4,23 +4,33 @@ using BwQuick.Core.Crypto;
 
 namespace BwQuick.Core.Storage;
 
+/// <summary>
+/// Everything needed to unlock and sync. The secrets in it are encrypted: the user key with the master key
+/// (as Bitwarden stores it) and optionally with a Windows Hello key, the client secret with the user key.
+/// </summary>
 public sealed record AccountInfo(
+    string Server,
     string ClientId,
-    string ClientSecret,
+    string ProtectedClientSecret,
     Guid DeviceId,
     string Email,
     KdfConfig Kdf,
-    string ProtectedUserKey);
+    string ProtectedUserKey,
+    byte[]? HelloChallenge = null,
+    string? HelloProtectedUserKey = null);
+
+public sealed class LegacyAccountException() : Exception("Account file from an older BwQuick version.");
 
 /// <summary>
-/// Persists account secrets and the encrypted vault cache under %LOCALAPPDATA%,
-/// wrapped with DPAPI so only the current Windows user on this machine can read them.
+/// Persists the account and the encrypted vault cache under %LOCALAPPDATA%, wrapped with DPAPI
+/// so only the current Windows user on this machine can read them.
 /// </summary>
 public sealed class SecureStore
 {
-    private const int AccountFormat = 1;
+    private const int LegacyAccountFormat = 1;
+    private const int AccountFormat = 2;
     private const int VaultFormat = 1;
-    private static readonly byte[] Entropy = "BwQuick.v1.7f3c2e9a-3d4b-4a8e-9c1f-2b6d8e0a5c47"u8.ToArray();
+    internal static readonly byte[] Entropy = "BwQuick.v1.7f3c2e9a-3d4b-4a8e-9c1f-2b6d8e0a5c47"u8.ToArray();
 
     public string Directory { get; }
     private string AccountPath => Path.Combine(Directory, "account.dat");
@@ -35,15 +45,15 @@ public sealed class SecureStore
 
     public bool HasAccount => File.Exists(AccountPath);
 
-    public void SaveAccount(AccountInfo info, SymmetricKey userKey)
+    public void SaveAccount(AccountInfo info)
     {
-        // Pre-sized so the buffer never regrows and leaves an unzeroed copy behind.
-        using var stream = new MemoryStream(8192);
+        using var stream = new MemoryStream();
         using (var w = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true))
         {
             w.Write(AccountFormat);
+            w.Write(info.Server);
             w.Write(info.ClientId);
-            w.Write(info.ClientSecret);
+            w.Write(info.ProtectedClientSecret);
             w.Write(info.DeviceId.ToByteArray());
             w.Write(info.Email);
             w.Write((int)info.Kdf.Type);
@@ -51,31 +61,30 @@ public sealed class SecureStore
             w.Write(info.Kdf.MemoryMiB ?? 0);
             w.Write(info.Kdf.Parallelism ?? 0);
             w.Write(info.ProtectedUserKey);
-            using var raw = userKey.Export();
-            w.Write(raw.Length);
-            w.Write(raw.Span);
+            var hello = info is { HelloChallenge: not null, HelloProtectedUserKey: not null };
+            w.Write(hello);
+            if (hello)
+            {
+                w.Write(info.HelloChallenge!.Length);
+                w.Write(info.HelloChallenge);
+                w.Write(info.HelloProtectedUserKey!);
+            }
         }
-
-        var buffer = stream.GetBuffer();
-        try
-        {
-            WriteProtected(AccountPath, buffer.AsSpan(0, (int)stream.Length));
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(buffer);
-        }
+        WriteProtected(AccountPath, stream.ToArray());
     }
 
-    public (AccountInfo Info, SymmetricKey UserKey) LoadAccount()
+    public AccountInfo LoadAccount()
     {
         var plain = ProtectedData.Unprotect(File.ReadAllBytes(AccountPath), Entropy, DataProtectionScope.CurrentUser);
         try
         {
             using var r = new BinaryReader(new MemoryStream(plain), Encoding.UTF8);
-            if (r.ReadInt32() != AccountFormat) throw new InvalidDataException("Unknown account file format.");
+            var format = r.ReadInt32();
+            if (format == LegacyAccountFormat) throw new LegacyAccountException();
+            if (format != AccountFormat) throw new InvalidDataException("Unknown account file format.");
+            var server = r.ReadString();
             var clientId = r.ReadString();
-            var clientSecret = r.ReadString();
+            var protectedClientSecret = r.ReadString();
             var deviceId = new Guid(r.ReadBytes(16));
             var email = r.ReadString();
             var kdfType = (KdfType)r.ReadInt32();
@@ -83,12 +92,23 @@ public sealed class SecureStore
             var memory = r.ReadInt32();
             var parallelism = r.ReadInt32();
             var protectedUserKey = r.ReadString();
-            var keyLength = r.ReadInt32();
-            if (keyLength is not (32 or 64)) throw new InvalidDataException("Corrupt account file.");
-            var key = new SymmetricKey(plain.AsSpan((int)r.BaseStream.Position, keyLength));
+            byte[]? helloChallenge = null;
+            string? helloProtectedUserKey = null;
+            if (r.ReadBoolean())
+            {
+                var length = r.ReadInt32();
+                if (length is < 16 or > 256) throw new InvalidDataException("Corrupt account file.");
+                helloChallenge = r.ReadBytes(length);
+                helloProtectedUserKey = r.ReadString();
+            }
 
             var kdf = new KdfConfig(kdfType, iterations, memory == 0 ? null : memory, parallelism == 0 ? null : parallelism);
-            return (new AccountInfo(clientId, clientSecret, deviceId, email, kdf, protectedUserKey), key);
+            return new AccountInfo(server, clientId, protectedClientSecret, deviceId, email, kdf, protectedUserKey,
+                helloChallenge, helloProtectedUserKey);
+        }
+        catch (EndOfStreamException e)
+        {
+            throw new InvalidDataException("Corrupt account file.", e);
         }
         finally
         {
@@ -123,7 +143,7 @@ public sealed class SecureStore
 
     public void Wipe()
     {
-        foreach (var path in new[] { AccountPath, VaultPath })
+        foreach (var path in new[] { AccountPath, VaultPath, AccountPath + ".tmp", VaultPath + ".tmp" })
         {
             if (!File.Exists(path)) continue;
             var length = new FileInfo(path).Length;
@@ -133,19 +153,9 @@ public sealed class SecureStore
         }
     }
 
-    private static void WriteProtected(string path, ReadOnlySpan<byte> plain)
+    private static void WriteProtected(string path, byte[] plain)
     {
-        var copy = plain.ToArray();
-        byte[] sealedBytes;
-        try
-        {
-            sealedBytes = ProtectedData.Protect(copy, Entropy, DataProtectionScope.CurrentUser);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(copy);
-        }
-
+        var sealedBytes = ProtectedData.Protect(plain, Entropy, DataProtectionScope.CurrentUser);
         var temp = path + ".tmp";
         File.WriteAllBytes(temp, sealedBytes);
         File.Move(temp, path, overwrite: true);

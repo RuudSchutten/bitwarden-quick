@@ -129,9 +129,11 @@ public sealed class SymmetricKey : IDisposable
         }
     }
 
+    /// <summary>Unwraps a user, organization or item key; only 64-byte keys are valid there.</summary>
     public SymmetricKey DecryptKey(EncString enc)
     {
         using var plain = Decrypt(enc);
+        if (plain.Length != 64) throw new CryptographicException("Decrypted key has an unexpected length.");
         return new SymmetricKey(plain.Span);
     }
 

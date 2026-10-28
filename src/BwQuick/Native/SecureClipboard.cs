@@ -63,6 +63,8 @@ internal static class SecureClipboard
         catch (Win32Exception) { return; }
         try
         {
+            // Opening can wait for another program that is writing; only clear what is still ours.
+            if (Win32.GetClipboardSequenceNumber() != sequence) return;
             var handle = Win32.GetClipboardData(Win32.CF_UNICODETEXT);
             if (handle != 0)
             {

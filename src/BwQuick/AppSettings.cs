@@ -11,6 +11,7 @@ internal sealed class AppSettings
 
     public string Hotkey { get; set; } = "Ctrl+Shift+Space";
     public int ClipboardClearSeconds { get; set; } = 30;
+    public int LockAfterIdleMinutes { get; set; } = 15;
     public bool HideFromScreenCapture { get; set; } = true;
     public List<string> Recent { get; set; } = [];
 
@@ -32,6 +33,7 @@ internal sealed class AppSettings
         }
         settings.Path = path;
         settings.ClipboardClearSeconds = Math.Clamp(settings.ClipboardClearSeconds, 5, 600);
+        settings.LockAfterIdleMinutes = Math.Clamp(settings.LockAfterIdleMinutes, 0, 1440);
         return settings;
     }
 
@@ -39,8 +41,14 @@ internal sealed class AppSettings
     {
         if (Path is null) return;
         var temp = Path + ".tmp";
-        File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(this, SettingsJsonContext.Default.AppSettings));
-        File.Move(temp, Path, overwrite: true);
+        try
+        {
+            File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(this, SettingsJsonContext.Default.AppSettings));
+            File.Move(temp, Path, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     public void MarkUsed(string id)

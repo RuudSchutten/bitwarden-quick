@@ -15,6 +15,7 @@ internal sealed class TrayIcon : IDisposable
 
     public event Action? OpenRequested;
     public event Action? SyncRequested;
+    public event Action? LockRequested;
     public event Action? SignOutRequested;
     public event Action? ExitRequested;
 
@@ -31,6 +32,7 @@ internal sealed class TrayIcon : IDisposable
         var menu = new ContextMenuStrip();
         menu.Items.Add(_openItem);
         menu.Items.Add(new ToolStripMenuItem("Sync now", null, (_, _) => SyncRequested?.Invoke()));
+        menu.Items.Add(new ToolStripMenuItem("Lock", null, (_, _) => LockRequested?.Invoke()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autostartItem);
         menu.Items.Add(new ToolStripMenuItem("Sign out and delete local data…", null, (_, _) => SignOutRequested?.Invoke()));

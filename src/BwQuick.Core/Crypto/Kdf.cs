@@ -14,19 +14,19 @@ public sealed record KdfConfig(KdfType Type, int Iterations, int? MemoryMiB = nu
 {
     /// <summary>
     /// Rejects parameters a compromised server could use to weaken the derivation, and
-    /// absurd ones that would hang the machine. Minimums match Bitwarden's own clients.
+    /// absurd ones that would hang the machine. Bounds match Bitwarden's own clients.
     /// </summary>
     public void Validate()
     {
         switch (Type)
         {
             case KdfType.Pbkdf2:
-                if (Iterations is < 5_000 or > 10_000_000)
+                if (Iterations is < 5_000 or > 2_000_000)
                     throw new CryptographicException($"PBKDF2 iteration count {Iterations} is out of range.");
                 break;
             case KdfType.Argon2id:
-                if (Iterations is < 2 or > 100
-                    || MemoryMiB is not (>= 16 and <= 1024)
+                if (Iterations is < 2 or > 10
+                    || MemoryMiB is not (>= 15 and <= 1024)
                     || Parallelism is not (>= 1 and <= 16))
                     throw new CryptographicException("Argon2id parameters are out of range.");
                 break;
@@ -91,12 +91,6 @@ public static class Kdf
         using var wrappingKey = protectedUserKey.Type == EncType.AesCbc256_B64
             ? new SymmetricKey(masterKey)
             : StretchMasterKey(masterKey);
-        var userKey = wrappingKey.DecryptKey(protectedUserKey);
-        if (userKey.Length != 64)
-        {
-            userKey.Dispose();
-            throw new CryptographicException("Decrypted user key has an unexpected length.");
-        }
-        return userKey;
+        return wrappingKey.DecryptKey(protectedUserKey);
     }
 }

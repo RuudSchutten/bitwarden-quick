@@ -19,8 +19,8 @@ internal sealed class FakeBitwarden : HttpMessageHandler
     public long Revision = 1_700_000_000_000;
     public bool Offline;
 
-    private readonly KdfConfig _kdf;
-    private readonly string _protectedUserKey;
+    private KdfConfig _kdf;
+    private string _protectedUserKey;
     private readonly List<object> _ciphers = [];
     private readonly string _encPrivateKey;
     private readonly string _encOrgKey;
@@ -32,15 +32,28 @@ internal sealed class FakeBitwarden : HttpMessageHandler
     {
         _kdf = kdf;
         UserKey = SymmetricKey.Generate();
-        using var masterKey = Kdf.DeriveMasterKey(Encoding.UTF8.GetBytes(masterPassword), Email, kdf);
-        using var stretched = Kdf.StretchMasterKey(masterKey.Span);
-        using (var raw = UserKey.Export()) _protectedUserKey = stretched.Encrypt(raw.Span).ToString();
+        _protectedUserKey = Wrap(UserKey, masterPassword, kdf);
 
         using var rsa = RSA.Create(2048);
         _encPrivateKey = UserKey.Encrypt(rsa.ExportPkcs8PrivateKey()).ToString();
         OrgKey = SymmetricKey.Generate();
         using (var raw = OrgKey.Export())
             _encOrgKey = "4." + Convert.ToBase64String(rsa.Encrypt(raw.Span.ToArray(), RSAEncryptionPadding.OaepSHA1));
+    }
+
+    /// <summary>Re-wraps a user key the way a master password or KDF change does.</summary>
+    public void Rewrap(SymmetricKey userKey, string masterPassword, KdfConfig kdf)
+    {
+        _kdf = kdf;
+        _protectedUserKey = Wrap(userKey, masterPassword, kdf);
+    }
+
+    private static string Wrap(SymmetricKey userKey, string masterPassword, KdfConfig kdf)
+    {
+        using var masterKey = Kdf.DeriveMasterKey(Encoding.UTF8.GetBytes(masterPassword), Email, kdf);
+        using var stretched = Kdf.StretchMasterKey(masterKey.Span);
+        using var raw = userKey.Export();
+        return stretched.Encrypt(raw.Span).ToString();
     }
 
     public void AddLogin(string id, SymmetricKey key, string name, string? username, string? password, string? uri,

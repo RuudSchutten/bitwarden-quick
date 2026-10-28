@@ -30,4 +30,10 @@ internal sealed class ClipboardGuard
         if (_sequence is { } sequence) SecureClipboard.ClearIfUnchanged(_owner(), sequence);
         _sequence = null;
     }
+
+    /// <summary>Callable from any thread, for when the process is about to die and the timer with it.</summary>
+    public void ClearAfterCrash()
+    {
+        if (_sequence is { } sequence) SecureClipboard.ClearIfUnchanged(0, sequence);
+    }
 }

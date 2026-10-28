@@ -223,7 +223,12 @@ public partial class QuickWindow : Window
     private async void CopyPassword()
     {
         if (Selected is not { } item) return;
-        var entry = item.Entry;
+        if (_service.Current?.Find(item.Entry.Id) is not { } entry)
+        {
+            SetStatus("Item no longer exists. Try again.", error: true);
+            RunSearch();
+            return;
+        }
         if (!entry.HasPassword)
         {
             SetStatus("This item has no password.", error: true);

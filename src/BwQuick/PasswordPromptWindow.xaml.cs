@@ -1,24 +1,31 @@
 using System.Windows;
-using BwQuick.Core;
+using BwQuick.Core.Crypto;
 
 namespace BwQuick;
 
 public partial class PasswordPromptWindow : Window
 {
-    private readonly VaultService _service;
+    private readonly Func<Secret, bool> _verify;
 
-    private PasswordPromptWindow(VaultService service, string itemName)
+    private PasswordPromptWindow(string title, string message, string button, Func<Secret, bool> verify)
     {
-        _service = service;
+        _verify = verify;
         InitializeComponent();
-        Message.Text = $"\"{itemName}\" requires your master password. Windows Hello is not set up on this PC.";
-        Loaded += (_, _) => Password.Focus();
+        Title = title;
+        Message.Text = message;
+        Confirm.Content = button;
+        Loaded += (_, _) =>
+        {
+            Activate();
+            Password.Focus();
+        };
     }
 
-    internal static bool Ask(Window owner, string itemName, VaultService service)
+    internal static bool Ask(Window? owner, string title, string message, string button, Func<Secret, bool> verify)
     {
-        var dialog = new PasswordPromptWindow(service, itemName);
-        if (owner.IsVisible) dialog.Owner = owner;
+        var dialog = new PasswordPromptWindow(title, message, button, verify);
+        if (owner is { IsVisible: true }) dialog.Owner = owner;
+        else dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         return dialog.ShowDialog() == true;
     }
 
@@ -28,7 +35,7 @@ public partial class PasswordPromptWindow : Window
         Error.Visibility = Visibility.Collapsed;
         using var secret = SecretInput.FromSecureString(Password.SecurePassword);
         Password.Clear();
-        var ok = await Task.Run(() => _service.VerifyMasterPassword(secret));
+        var ok = await Task.Run(() => _verify(secret));
         Confirm.IsEnabled = true;
         if (ok)
         {

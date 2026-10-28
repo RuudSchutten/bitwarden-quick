@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using BwQuick.Core.Api;
 using BwQuick.Core.Crypto;
 using BwQuick.Core.Items;
@@ -10,9 +11,12 @@ public sealed class SetupException(string message, Exception? inner = null) : Ex
 
 public sealed class VaultService : IDisposable
 {
+    private static readonly byte[] HelloKeyInfo = "BwQuick Windows Hello"u8.ToArray();
+
     private readonly SecureStore _store;
     private readonly BitwardenApi _api;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
+    private readonly Lock _gate = new();
 
     private AccountInfo? _account;
     private SymmetricKey? _userKey;
@@ -29,30 +33,164 @@ public sealed class VaultService : IDisposable
 
     public event Action? Changed;
 
-    public bool IsConfigured => _store.HasAccount;
-    public bool IsUnlocked => _vault is not null;
+    public bool HasStoredAccount => _store.HasAccount;
+    public bool IsConfigured => _account is not null;
+    public bool IsUnlocked => _userKey is not null;
     public bool NeedsSetup { get; private set; }
     public Vault? Current => _vault;
     public DateTimeOffset? LastSync { get; private set; }
     public string? LastError { get; private set; }
 
-    /// <summary>Unlocks using the DPAPI-protected user key and the cached vault. No network needed.</summary>
-    public void UnlockFromDisk()
-    {
-        var (info, key) = _store.LoadAccount();
-        _account = info;
-        ReplaceUserKey(key);
+    /// <summary>The challenge to sign with the Windows Hello key, or null when Hello unlock is not set up.</summary>
+    public byte[]? HelloChallenge => _account?.HelloChallenge;
 
+    /// <summary>Reads the stored account. The vault stays locked until one of the unlock methods succeeds.</summary>
+    public void LoadAccount()
+    {
+        AccountInfo account;
+        try
+        {
+            account = _store.LoadAccount();
+        }
+        catch (LegacyAccountException)
+        {
+            _store.Wipe();
+            throw new SetupException("BwQuick now locks your vault. Connect your vault again.");
+        }
+        if (account.Server != _api.Server)
+            throw new SetupException($"BwQuick was set up for {account.Server}. Connect your vault again.");
+
+        lock (_gate)
+        {
+            SwapVault(null, 0);
+            ReplaceUserKey(null);
+            _accessToken = null;
+            _account = account;
+        }
+    }
+
+    public bool UnlockWithHello(ReadOnlySpan<byte> signature)
+    {
+        if (_account is not { HelloChallenge: { } challenge, HelloProtectedUserKey: { } wrapped }) return false;
+        try
+        {
+            using var wrappingKey = HelloWrappingKey(signature, challenge);
+            return TryUnlock(wrappingKey.DecryptKey(EncString.Parse(wrapped)));
+        }
+        catch (Exception e) when (e is CryptographicException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    public bool UnlockWithMasterPassword(Secret password)
+    {
+        if (_account is not { } account) return false;
+        try
+        {
+            using var masterKey = Kdf.DeriveMasterKey(password.Span, account.Email, account.Kdf);
+            return TryUnlock(Kdf.DecryptUserKey(masterKey.Span, EncString.Parse(account.ProtectedUserKey)));
+        }
+        catch (Exception e) when (e is CryptographicException or NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private bool TryUnlock(SymmetricKey key)
+    {
+        var account = _account;
+        if (account is null)
+        {
+            key.Dispose();
+            return false;
+        }
+        try
+        {
+            // The client secret is authenticated with the user key, so this rejects a wrong key.
+            using (key.Decrypt(EncString.Parse(account.ProtectedClientSecret))) { }
+        }
+        catch (Exception e) when (e is CryptographicException or NotSupportedException)
+        {
+            key.Dispose();
+            return false;
+        }
+
+        Vault? vault = null;
+        long revision = 0;
         if (_store.LoadVault() is { } cached)
         {
             try
             {
-                SwapVault(Vault.Load(BitwardenApi.ParseSync(cached.SyncJson), key), cached.Revision);
+                vault = Vault.Load(BitwardenApi.ParseSync(cached.SyncJson), key);
+                revision = cached.Revision;
             }
             catch (Exception e) when (e is CryptographicException or System.Text.Json.JsonException or InvalidDataException)
             {
-                _revision = 0;
             }
+        }
+
+        lock (_gate)
+        {
+            if (!ReferenceEquals(_account, account))
+            {
+                vault?.Dispose();
+                key.Dispose();
+                return false;
+            }
+            ReplaceUserKey(key);
+            SwapVault(vault, revision);
+        }
+        Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Forgets the user key, the decrypted vault and the access token until the next unlock.</summary>
+    public void Lock()
+    {
+        lock (_gate)
+        {
+            if (_userKey is null) return;
+            SwapVault(null, 0);
+            ReplaceUserKey(null);
+            _accessToken = null;
+        }
+        Changed?.Invoke();
+    }
+
+    public static byte[] NewHelloChallenge() => RandomNumberGenerator.GetBytes(32);
+
+    /// <summary>
+    /// Wraps the user key with a key derived from a Windows Hello signature over <paramref name="challenge"/>.
+    /// Hello keys sign with RSA PKCS#1 v1.5, which is deterministic, so the same signature unlocks later.
+    /// </summary>
+    public void EnableHello(byte[] challenge, ReadOnlySpan<byte> signature)
+    {
+        lock (_gate)
+        {
+            if (_account is null || _userKey is null) throw new InvalidOperationException("The vault is locked.");
+            using var wrappingKey = HelloWrappingKey(signature, challenge);
+            using var raw = _userKey.Export();
+            _account = _account with
+            {
+                HelloChallenge = challenge,
+                HelloProtectedUserKey = wrappingKey.Encrypt(raw.Span).ToString(),
+            };
+            _store.SaveAccount(_account);
+        }
+    }
+
+    private static SymmetricKey HelloWrappingKey(ReadOnlySpan<byte> signature, ReadOnlySpan<byte> challenge)
+    {
+        Span<byte> key = stackalloc byte[64];
+        try
+        {
+            HKDF.DeriveKey(HashAlgorithmName.SHA256, signature, key, challenge, HelloKeyInfo);
+            return new SymmetricKey(key);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
         }
     }
 
@@ -90,7 +228,7 @@ public sealed class VaultService : IDisposable
 
         var email = sync.Profile?.Email ?? throw new SetupException("The profile has no email address.");
         var protectedUserKey = token.Key ?? sync.Profile?.Key ?? throw new SetupException("No vault key received.");
-        var kdf = new KdfConfig((KdfType)token.Kdf, token.KdfIterations, token.KdfMemory, token.KdfParallelism);
+        var kdf = KdfOf(token);
 
         try
         {
@@ -121,9 +259,12 @@ public sealed class VaultService : IDisposable
         }
 
         Vault vault;
+        AccountInfo account;
         try
         {
             vault = Vault.Load(sync, userKey);
+            var protectedSecret = userKey.Encrypt(Encoding.UTF8.GetBytes(credentials.ClientSecret)).ToString();
+            account = new AccountInfo(_api.Server, credentials.ClientId, protectedSecret, credentials.DeviceId, email, kdf, protectedUserKey);
         }
         catch
         {
@@ -131,16 +272,17 @@ public sealed class VaultService : IDisposable
             throw;
         }
 
-        var account = new AccountInfo(credentials.ClientId, credentials.ClientSecret, credentials.DeviceId, email, kdf, protectedUserKey);
-        _store.SaveAccount(account, userKey);
-        _store.SaveVault(revision, json);
-
-        _account = account;
-        _accessToken = token.AccessToken;
-        _accessTokenExpiry = DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn - 60);
-        NeedsSetup = false;
-        ReplaceUserKey(userKey);
-        SwapVault(vault, revision);
+        lock (_gate)
+        {
+            _store.SaveAccount(account);
+            _store.SaveVault(revision, json);
+            _account = account;
+            _accessToken = token.AccessToken;
+            _accessTokenExpiry = ExpiryOf(token);
+            NeedsSetup = false;
+            ReplaceUserKey(userKey);
+            SwapVault(vault, revision);
+        }
         LastSync = DateTimeOffset.Now;
         LastError = null;
         Changed?.Invoke();
@@ -149,11 +291,13 @@ public sealed class VaultService : IDisposable
     /// <summary>Checks the account revision and only downloads the vault when something changed.</summary>
     public async Task SyncAsync(bool force = false, CancellationToken ct = default)
     {
-        if (_account is null || _userKey is null) return;
+        var account = _account;
+        var userKey = _userKey;
+        if (account is null || userKey is null) return;
         if (!await _syncLock.WaitAsync(0, ct).ConfigureAwait(false)) return;
         try
         {
-            var token = await GetAccessTokenAsync(ct).ConfigureAwait(false);
+            var token = await GetAccessTokenAsync(account, userKey, ct).ConfigureAwait(false);
             long revision;
             try
             {
@@ -162,7 +306,7 @@ public sealed class VaultService : IDisposable
             catch (UnauthorizedAccessException)
             {
                 _accessToken = null;
-                token = await GetAccessTokenAsync(ct).ConfigureAwait(false);
+                token = await GetAccessTokenAsync(account, userKey, ct).ConfigureAwait(false);
                 revision = await _api.GetRevisionDateAsync(token, ct).ConfigureAwait(false);
             }
 
@@ -173,21 +317,34 @@ public sealed class VaultService : IDisposable
                 Vault vault;
                 try
                 {
-                    vault = Vault.Load(sync, _userKey);
+                    vault = Vault.Load(sync, userKey);
                 }
-                catch (CryptographicException)
+                catch (CryptographicException) when (ReferenceEquals(_userKey, userKey))
                 {
                     NeedsSetup = true;
                     throw new SetupException("Your vault key has changed. Set up BwQuick again.");
                 }
-                // A master password change re-wraps the same user key; keep the new wrap for reprompt checks.
-                if (sync.Profile?.Key is { } wrapped && wrapped != _account.ProtectedUserKey)
+
+                try
                 {
-                    _account = _account with { ProtectedUserKey = wrapped };
-                    _store.SaveAccount(_account, _userKey);
+                    await RefreshAccountAsync(account, userKey, sync, ct).ConfigureAwait(false);
                 }
-                _store.SaveVault(revision, json);
-                SwapVault(vault, revision);
+                catch
+                {
+                    vault.Dispose();
+                    throw;
+                }
+
+                lock (_gate)
+                {
+                    if (!ReferenceEquals(_userKey, userKey))
+                    {
+                        vault.Dispose();
+                        return;
+                    }
+                    _store.SaveVault(revision, json);
+                    SwapVault(vault, revision);
+                }
             }
 
             LastSync = DateTimeOffset.Now;
@@ -206,6 +363,9 @@ public sealed class VaultService : IDisposable
         {
             LastError = "Offline – showing the last synced vault";
         }
+        catch (Exception e) when (e is ObjectDisposedException or CryptographicException && !ReferenceEquals(_userKey, userKey))
+        {
+        }
         finally
         {
             _syncLock.Release();
@@ -213,16 +373,63 @@ public sealed class VaultService : IDisposable
         }
     }
 
-    private async Task<string> GetAccessTokenAsync(CancellationToken ct)
+    /// <summary>
+    /// A master password, KDF or email change re-wraps the same user key. The KDF settings come from a fresh
+    /// login so they always match the wrapped key that is stored with them.
+    /// </summary>
+    private async Task RefreshAccountAsync(AccountInfo account, SymmetricKey userKey, SyncResponse sync, CancellationToken ct)
     {
-        if (_accessToken is not null && DateTimeOffset.UtcNow < _accessTokenExpiry) return _accessToken;
-        var account = _account!;
-        var token = await _api.LoginAsync(new ApiCredentials(account.ClientId, account.ClientSecret, account.DeviceId), ct)
-            .ConfigureAwait(false);
-        _accessToken = token.AccessToken;
-        _accessTokenExpiry = DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, token.ExpiresIn - 60));
-        return _accessToken;
+        var wrapped = sync.Profile?.Key ?? account.ProtectedUserKey;
+        var email = sync.Profile?.Email ?? account.Email;
+        if (wrapped == account.ProtectedUserKey && email == account.Email) return;
+
+        var token = await LoginAsync(account, userKey, ct).ConfigureAwait(false);
+        var kdf = KdfOf(token);
+        try
+        {
+            kdf.Validate();
+        }
+        catch (Exception e) when (e is CryptographicException or NotSupportedException)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (!ReferenceEquals(_account, account) || !ReferenceEquals(_userKey, userKey)) return;
+            _account = account with { ProtectedUserKey = token.Key ?? wrapped, Email = email, Kdf = kdf };
+            _store.SaveAccount(_account);
+        }
     }
+
+    private async Task<string> GetAccessTokenAsync(AccountInfo account, SymmetricKey userKey, CancellationToken ct)
+    {
+        if (_accessToken is { } cached && DateTimeOffset.UtcNow < _accessTokenExpiry) return cached;
+        var token = await LoginAsync(account, userKey, ct).ConfigureAwait(false);
+        return token.AccessToken;
+    }
+
+    private async Task<TokenResponse> LoginAsync(AccountInfo account, SymmetricKey userKey, CancellationToken ct)
+    {
+        var clientSecret = userKey.DecryptString(EncString.Parse(account.ProtectedClientSecret));
+        var token = await _api.LoginAsync(new ApiCredentials(account.ClientId, clientSecret, account.DeviceId), ct)
+            .ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (ReferenceEquals(_userKey, userKey))
+            {
+                _accessToken = token.AccessToken;
+                _accessTokenExpiry = ExpiryOf(token);
+            }
+        }
+        return token;
+    }
+
+    private static KdfConfig KdfOf(TokenResponse token) =>
+        new((KdfType)token.Kdf, token.KdfIterations, token.KdfMemory, token.KdfParallelism);
+
+    private static DateTimeOffset ExpiryOf(TokenResponse token) =>
+        DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, token.ExpiresIn - 60));
 
     public Secret? DecryptPassword(string id)
     {
@@ -230,17 +437,21 @@ public sealed class VaultService : IDisposable
         return entry is null ? null : Vault.DecryptPassword(entry);
     }
 
-    /// <summary>Re-derives the master key and checks it unwraps the stored user key.</summary>
+    /// <summary>Re-derives the master key and checks it unwraps to the user key this vault is unlocked with.</summary>
     public bool VerifyMasterPassword(Secret password)
     {
-        if (_account is null) return false;
+        var account = _account;
+        var userKey = _userKey;
+        if (account is null || userKey is null) return false;
         try
         {
-            using var masterKey = Kdf.DeriveMasterKey(password.Span, _account.Email, _account.Kdf);
-            using var key = Kdf.DecryptUserKey(masterKey.Span, EncString.Parse(_account.ProtectedUserKey));
-            return true;
+            using var masterKey = Kdf.DeriveMasterKey(password.Span, account.Email, account.Kdf);
+            using var candidate = Kdf.DecryptUserKey(masterKey.Span, EncString.Parse(account.ProtectedUserKey));
+            using var a = candidate.Export();
+            using var b = userKey.Export();
+            return CryptographicOperations.FixedTimeEquals(a.Span, b.Span);
         }
-        catch (CryptographicException)
+        catch (Exception e) when (e is CryptographicException or NotSupportedException or ObjectDisposedException)
         {
             return false;
         }
@@ -248,26 +459,26 @@ public sealed class VaultService : IDisposable
 
     public void SignOut()
     {
-        _store.Wipe();
-        _vault?.Dispose();
-        _vault = null;
-        _userKey?.Dispose();
-        _userKey = null;
-        _account = null;
-        _accessToken = null;
-        _revision = 0;
-        LastSync = null;
+        lock (_gate)
+        {
+            _store.Wipe();
+            SwapVault(null, 0);
+            ReplaceUserKey(null);
+            _account = null;
+            _accessToken = null;
+            LastSync = null;
+        }
         Changed?.Invoke();
     }
 
-    private void ReplaceUserKey(SymmetricKey key)
+    private void ReplaceUserKey(SymmetricKey? key)
     {
         var old = _userKey;
         _userKey = key;
         if (!ReferenceEquals(old, key)) old?.Dispose();
     }
 
-    private void SwapVault(Vault vault, long revision)
+    private void SwapVault(Vault? vault, long revision)
     {
         var old = Interlocked.Exchange(ref _vault, vault);
         _revision = revision;
