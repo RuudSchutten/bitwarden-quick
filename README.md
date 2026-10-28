@@ -15,7 +15,7 @@ Unofficial; not affiliated with Bitwarden.
 | `Ctrl+Alt+C` | Copy the one-time password (TOTP) |
 | `Ctrl+Shift+U` | Copy website |
 | `Alt+Enter` | Open the website in your browser |
-| `Shift+Enter` | Auto-Type: type username, Tab, password, Enter into the window you came from |
+| `Shift+Enter` | Auto-Type: type username, Tab, password, Enter into the window you came from, then copy the one-time password if the item has one |
 | `Ctrl+Shift+O` | Open the item in the Bitwarden web vault |
 | `→` | More actions for the selected item (`Esc` or `←` goes back) |
 | `Ctrl+Shift+/` or `F1` | Keyboard shortcuts |
@@ -63,7 +63,8 @@ for your master password.
   Icons are only fetched for results on screen, and are kept as 48-pixel PNGs (a few KB each) in `icons.dat`,
   encrypted with your user key like the vault. They are refreshed after 30 days, missing icons after 7.
 - Auto-Type only types into the window that was in front when you pressed the hotkey, and only once that window
-  is in front again. Items with "Master password re-prompt" ask for confirmation first.
+  is in front again; never into the taskbar or desktop. Items with "Master password re-prompt" ask for
+  confirmation first.
 - Open in browser only opens `http` and `https` addresses.
 - One-time passwords are computed on this PC from the item's authenticator key, which is decrypted only for that.
   Like passwords they are excluded from clipboard history, cleared after 30 seconds, and need confirmation for

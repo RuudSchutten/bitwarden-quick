@@ -86,6 +86,14 @@ internal static partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindow(nint hWnd);
 
+    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW")]
+    private static unsafe partial int GetClassName(nint hWnd, char* lpClassName, int nMaxCount);
+
+    public static unsafe int GetClassName(nint hWnd, Span<char> buffer)
+    {
+        fixed (char* p = buffer) return GetClassName(hWnd, p, buffer.Length);
+    }
+
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool RegisterHotKey(nint hWnd, int id, uint fsModifiers, uint vk);

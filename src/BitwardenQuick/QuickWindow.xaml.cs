@@ -504,19 +504,23 @@ public partial class QuickWindow : Window
             return;
         }
         if (!await ConfirmAsync(entry, "copy the one-time password")) return;
+        if (PutTotpOnClipboard(entry) is { } error) SetStatus(error, error: true);
+        else Done(entry);
+    }
+
+    /// <summary>Returns null when the code is on the clipboard, otherwise why it is not.</summary>
+    private string? PutTotpOnClipboard(VaultEntry entry)
+    {
         try
         {
             if (_service.GenerateTotp(entry.Id, DateTimeOffset.UtcNow) is not { } totp)
-            {
-                SetStatus("The authenticator key of this item is not valid.", error: true);
-                return;
-            }
+                return "The authenticator key of this item is not valid.";
             _clipboard.Arm(SecureClipboard.SetText(ClipboardOwner, totp.Code, sensitive: true), _settings.ClipboardClearSeconds);
-            Done(entry);
+            return null;
         }
         catch (Exception ex) when (ex is ObjectDisposedException or System.Security.Cryptography.CryptographicException or Win32Exception)
         {
-            SetStatus(ex is Win32Exception ? ex.Message : "Decryption failed.", error: true);
+            return ex is Win32Exception ? ex.Message : "Decryption failed.";
         }
     }
 
@@ -631,7 +635,12 @@ public partial class QuickWindow : Window
             if (password is not null) Array.Clear(password);
         }
 
-        if (error is null) return;
+        if (error is null)
+        {
+            // The form was just submitted, so a failure here is only shown the next time the window opens.
+            if (entry.HasTotp && PutTotpOnClipboard(entry) is { } totpError) SetStatus(totpError, error: true);
+            return;
+        }
         if (!IsVisible)
         {
             WindowEffects.PlaceOnCursorMonitor(this);

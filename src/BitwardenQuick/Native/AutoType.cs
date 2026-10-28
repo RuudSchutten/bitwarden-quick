@@ -5,16 +5,26 @@ namespace BitwardenQuick.Native;
 /// <summary>Types a username and password into another window, as username, Tab, password, Enter.</summary>
 internal static class AutoType
 {
+    // The taskbar, desktop, Start and the tray overflow, which are in front when BitwardenQuick is opened from the tray.
+    private static readonly string[] ShellClasses =
+    [
+        "Shell_TrayWnd", "Shell_SecondaryTrayWnd", "Progman", "WorkerW", "NotifyIconOverflowWindow",
+        "TopLevelWindowForOverflowXamlIsland", "Windows.UI.Core.CoreWindow",
+    ];
+
     private static readonly ushort[] HeldKeys =
         [Win32.VK_SHIFT, Win32.VK_CONTROL, Win32.VK_MENU, Win32.VK_LWIN, Win32.VK_RWIN, Win32.VK_RETURN];
 
-    /// <summary>The window that was in front before BitwardenQuick opened, or 0 when that was BitwardenQuick itself.</summary>
+    /// <summary>The window that was in front before BitwardenQuick opened, or 0 when that was BitwardenQuick or the shell.</summary>
     public static nint ForegroundWindowOfOtherProcess()
     {
         var window = Win32.GetForegroundWindow();
         if (window == 0) return 0;
         Win32.GetWindowThreadProcessId(window, out var pid);
-        return pid == Environment.ProcessId ? 0 : window;
+        if (pid == Environment.ProcessId) return 0;
+        Span<char> name = stackalloc char[64];
+        var length = Win32.GetClassName(window, name);
+        return ShellClasses.Contains(name[..Math.Max(length, 0)].ToString()) ? 0 : window;
     }
 
     /// <summary>Returns null when the keys were sent, otherwise why nothing was typed.</summary>
