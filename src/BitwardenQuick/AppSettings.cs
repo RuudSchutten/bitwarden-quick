@@ -14,6 +14,7 @@ internal sealed class AppSettings
     public int LockAfterIdleMinutes { get; set; } = 15;
     public bool HideFromScreenCapture { get; set; } = true;
     public bool ShowWebsiteIcons { get; set; } = true;
+    public string? Server { get; set; }
     public List<string> Recent { get; set; } = [];
 
     [JsonIgnore] public string? Path { get; private set; }

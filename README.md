@@ -21,8 +21,9 @@ Unofficial; not affiliated with Bitwarden.
 | `Ctrl+Shift+/` or `F1` | Keyboard shortcuts |
 | `Esc` | Close |
 
-Run `publish\BitwardenQuick.exe`. On first start BitwardenQuick asks for your personal API key
-(vault.bitwarden.com › Settings › Security › Keys › View API key) and your master password.
+Run `publish\BitwardenQuick.exe`. On first start BitwardenQuick asks for your region (bitwarden.com or
+bitwarden.eu), your personal API key (vault.bitwarden.com or vault.bitwarden.eu › Settings › Security › Keys ›
+View API key) and your master password.
 After that it starts with Windows and runs in the system tray.
 
 Build:
@@ -57,9 +58,9 @@ for your master password.
 - After three wrong master passwords, each further attempt waits longer, up to 32 seconds.
 - NuGet dependencies are pinned by content hash in `packages.lock.json`.
 - The server's KDF settings are checked against Bitwarden's bounds.
-- Website icons come from Bitwarden's icon service (`icons.bitwarden.net`, or `/icons` on a self-hosted server),
-  like in Bitwarden's own apps. That service sees the host names of your logins, never other item data. Addresses
-  on a local network (IP addresses, `localhost`, `.local`, `.lan`, `.internal`, names without a dot) are not sent.
+- Website icons come from Bitwarden's icon service (`icons.bitwarden.net`, `icons.bitwarden.eu`, or `/icons` on a
+  self-hosted server), like in Bitwarden's own apps. That service sees the host names of your logins, never other
+  item data. Addresses on a local network (IP addresses, `localhost`, `.local`, `.lan`, `.internal`, names without a dot) are not sent.
   Icons are only fetched for results on screen, and are kept as 48-pixel PNGs (a few KB each) in `icons.dat`,
   encrypted with your user key like the vault. They are refreshed after 30 days, missing icons after 7.
 - Auto-Type only types into the window that was in front when you pressed the hotkey, and only once that window
@@ -77,14 +78,16 @@ for your master password.
 - The stored user key is encrypted with your master key, like in Bitwarden's own apps. Someone who obtains
   that file and can decrypt it as you can try to guess your master password offline, so use a strong one.
 - Signing out in BitwardenQuick only deletes local data and the Windows Hello key. If your PC may be compromised,
-  rotate your API key on vault.bitwarden.com.
+  rotate your API key in the Bitwarden web vault.
 - The re-prompt check runs in BitwardenQuick itself; it does not protect against software running as you.
 
 ## Settings
 
 `%LOCALAPPDATA%\BitwardenQuick\settings.json`: `Hotkey`, `ClipboardClearSeconds`, `LockAfterIdleMinutes`
-(`0` disables the idle lock), `HideFromScreenCapture`, `ShowWebsiteIcons`.
+(`0` disables the idle lock), `HideFromScreenCapture`, `ShowWebsiteIcons`, `Server` (`bitwarden.com`,
+`bitwarden.eu` or the https base URL of a self-hosted server; set by setup).
 Lock, and sign out and delete all local data, from the tray icon menu.
 
-For a self-hosted server, set `BITWARDENQUICK_SERVER` to its base URL (https only) before setup. An account set up
-for one server is not used with another. `BITWARDENQUICK_DATA_DIR` moves the data folder.
+For a self-hosted server, set `Server` or the `BITWARDENQUICK_SERVER` environment variable (which wins) to its base
+URL (https only) before setup. An account set up for one server is not used with another; to switch region, sign
+out from the tray menu and set up again. `BITWARDENQUICK_DATA_DIR` moves the data folder.

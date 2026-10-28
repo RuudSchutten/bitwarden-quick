@@ -92,7 +92,6 @@ public partial class QuickWindow : Window
     private readonly AppSettings _settings;
     private readonly ClipboardGuard _clipboard;
     private readonly IconCache _icons;
-    private readonly Uri _webVault;
     private readonly bool _acrylic = WindowEffects.SupportsBackdrop;
     private View _view;
     private ResultItem? _actionsItem;
@@ -109,7 +108,7 @@ public partial class QuickWindow : Window
         _settings = settings;
         _clipboard = clipboard;
         _icons = icons;
-        _webVault = webVault;
+        WebVault = webVault;
         InitializeComponent();
 
         var hotkey = settings.Hotkey.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
@@ -152,6 +151,8 @@ public partial class QuickWindow : Window
     }
 
     internal bool Acrylic => _acrylic;
+
+    internal Uri WebVault { get; set; }
 
     internal void ApplyTheme()
     {
@@ -573,7 +574,7 @@ public partial class QuickWindow : Window
     private void OpenInBitwarden()
     {
         if (CurrentEntry(needPassword: false) is not { } entry) return;
-        Launch(new Uri($"{_webVault.AbsoluteUri}#/vault?itemId={Uri.EscapeDataString(entry.Id)}&action=view"), entry);
+        Launch(new Uri($"{WebVault.AbsoluteUri}#/vault?itemId={Uri.EscapeDataString(entry.Id)}&action=view"), entry);
     }
 
     private void Launch(Uri uri, VaultEntry entry)

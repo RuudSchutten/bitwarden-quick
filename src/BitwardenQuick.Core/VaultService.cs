@@ -14,7 +14,7 @@ public sealed class VaultService : IDisposable
     private static readonly byte[] HelloKeyInfo = "BitwardenQuick Windows Hello"u8.ToArray();
 
     private readonly SecureStore _store;
-    private readonly BitwardenApi _api;
+    private BitwardenApi _api;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly Lock _gate = new();
 
@@ -41,6 +41,35 @@ public sealed class VaultService : IDisposable
     public DateTimeOffset? LastSync { get; private set; }
     public string? LastError { get; private set; }
     public string? Email => _account?.Email;
+    public string ServerName => _api.Name;
+
+    /// <summary>
+    /// Signs in to another server from now on, for a setup that is about to start. Forgets the account in memory;
+    /// the stored one is replaced when that setup completes, and is still used after a restart if it does not.
+    /// </summary>
+    public void UseServer(BitwardenApi api)
+    {
+        BitwardenApi old;
+        lock (_gate)
+        {
+            if (api.Server == _api.Server)
+            {
+                api.Dispose();
+                return;
+            }
+            SwapVault(null, 0);
+            ReplaceUserKey(null);
+            _account = null;
+            _accessToken = null;
+            NeedsSetup = false;
+            LastSync = null;
+            LastError = null;
+            old = _api;
+            _api = api;
+        }
+        old.Dispose();
+        Changed?.Invoke();
+    }
 
     /// <summary>The challenge to sign with the Windows Hello key, or null when Hello unlock is not set up.</summary>
     public byte[]? HelloChallenge => _account?.HelloChallenge;
@@ -204,7 +233,7 @@ public sealed class VaultService : IDisposable
     {
         var credentials = new ApiCredentials(clientId.Trim(), clientSecret.Trim(), Guid.NewGuid());
 
-        progress?.Report("Signing in to bitwarden.com…");
+        progress?.Report($"Signing in to {_api.Name}…");
         TokenResponse token;
         try
         {
@@ -216,7 +245,7 @@ public sealed class VaultService : IDisposable
         }
         catch (HttpRequestException e)
         {
-            throw new SetupException("Cannot reach bitwarden.com. Check your internet connection.", e);
+            throw new SetupException($"Cannot reach {_api.Name}. Check your internet connection.", e);
         }
 
         if (token.ApiUseKeyConnector)

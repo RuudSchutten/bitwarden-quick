@@ -2,19 +2,30 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Media;
 using BitwardenQuick.Core;
+using BitwardenQuick.Core.Api;
 
 namespace BitwardenQuick;
 
 public partial class SetupWindow : Window
 {
     private readonly VaultService _service;
+    private readonly BitwardenServer _fixedServer;
+    private readonly bool _canChooseRegion;
 
     internal event Action? Completed;
 
-    internal SetupWindow(VaultService service, string? reason)
+    /// <summary>Raised with the region to sign in to, before the sign-in starts.</summary>
+    internal event Action<BitwardenServer>? ServerChosen;
+
+    internal SetupWindow(VaultService service, string? reason, BitwardenServer server, bool canChooseRegion)
     {
         _service = service;
+        _fixedServer = server;
+        _canChooseRegion = canChooseRegion;
         InitializeComponent();
+        RegionPanel.Visibility = canChooseRegion ? Visibility.Visible : Visibility.Collapsed;
+        RegionEu.IsChecked = server == BitwardenServer.Europe;
+        VaultHost.Text = server.WebVault.Host;
         if (reason is not null) ShowStatus(reason, error: true);
         Loaded += (_, _) => ClientId.Focus();
     }
@@ -25,6 +36,15 @@ public partial class SetupWindow : Window
         Status.Foreground = (Brush)Application.Current.Resources[error ? "ErrorBrush" : "MutedBrush"];
     }
 
+    private BitwardenServer Server => !_canChooseRegion ? _fixedServer
+        : RegionEu.IsChecked == true ? BitwardenServer.Europe : BitwardenServer.UnitedStates;
+
+    private void OnRegionChanged(object sender, RoutedEventArgs e)
+    {
+        // Also raised while the XAML loads, before every named element exists.
+        if (VaultHost is not null && RegionEu is not null) VaultHost.Text = Server.WebVault.Host;
+    }
+
     private async void OnConnect(object sender, RoutedEventArgs e)
     {
         if (ClientId.Text.Trim().Length == 0 || ClientSecret.SecurePassword.Length == 0 || MasterPassword.SecurePassword.Length == 0)
@@ -33,11 +53,17 @@ public partial class SetupWindow : Window
             return;
         }
 
+        var server = Server;
         SetBusy(true);
         try
         {
+            ServerChosen?.Invoke(server);
             using var master = SecretInput.FromSecureString(MasterPassword.SecurePassword);
-            var progress = new Progress<string>(text => ShowStatus(text));
+            // Reports are posted, so one can arrive after a quick failure and would hide its message.
+            var progress = new Progress<string>(text =>
+            {
+                if (!Connect.IsEnabled) ShowStatus(text);
+            });
             await _service.SetupAsync(ClientId.Text, ClientSecret.Password, master, progress);
             MasterPassword.Clear();
             ClientSecret.Clear();
@@ -56,7 +82,7 @@ public partial class SetupWindow : Window
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            ShowStatus("Could not connect to bitwarden.com. Try again later.", error: true);
+            ShowStatus($"Could not connect to {server.Name}. Try again later.", error: true);
         }
         finally
         {
@@ -70,5 +96,6 @@ public partial class SetupWindow : Window
         ClientId.IsEnabled = !busy;
         ClientSecret.IsEnabled = !busy;
         MasterPassword.IsEnabled = !busy;
+        RegionPanel.IsEnabled = !busy;
     }
 }

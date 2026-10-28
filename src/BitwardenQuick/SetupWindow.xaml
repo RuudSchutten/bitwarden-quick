@@ -7,10 +7,20 @@
     <StackPanel Margin="28,24,28,26">
         <TextBlock Text="Connect your Bitwarden vault" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" />
         <TextBlock x:Name="Intro" Margin="0,8,0,4" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource MutedBrush}">
-            Find your personal API key on vault.bitwarden.com under
+            Find your personal API key on <Run x:Name="VaultHost" Text="vault.bitwarden.com" /> under
             <Run FontWeight="SemiBold">Settings › Security › Keys › View API key</Run>.
             Your master password is only used now to derive your vault key and is never stored.
         </TextBlock>
+
+        <StackPanel x:Name="RegionPanel">
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Region" />
+            <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="RegionUs" GroupName="Region" Content="bitwarden.com (US)" IsChecked="True" FontSize="13"
+                             Foreground="{DynamicResource TextBrush}" Margin="0,2,24,0" Checked="OnRegionChanged" />
+                <RadioButton x:Name="RegionEu" GroupName="Region" Content="bitwarden.eu (EU)" FontSize="13"
+                             Foreground="{DynamicResource TextBrush}" Margin="0,2,0,0" Checked="OnRegionChanged" />
+            </StackPanel>
+        </StackPanel>
 
         <TextBlock Style="{StaticResource FieldLabel}" Text="client_id" />
         <TextBox x:Name="ClientId" Style="{StaticResource Field}" />

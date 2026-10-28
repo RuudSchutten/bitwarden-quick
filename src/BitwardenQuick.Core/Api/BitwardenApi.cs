@@ -22,10 +22,17 @@ public sealed class BitwardenApi : IDisposable
     private readonly Uri _identity;
     private readonly Uri _api;
 
+    public BitwardenApi(BitwardenServer server, HttpMessageHandler? handler = null)
+        : this(server.Identity, server.Api, handler)
+    {
+        Name = server.Name;
+    }
+
     public BitwardenApi(Uri? identity = null, Uri? api = null, HttpMessageHandler? handler = null)
     {
-        _identity = identity ?? new Uri("https://identity.bitwarden.com/");
-        _api = api ?? new Uri("https://api.bitwarden.com/");
+        _identity = identity ?? BitwardenServer.UnitedStates.Identity;
+        _api = api ?? BitwardenServer.UnitedStates.Api;
+        Name = identity is null ? BitwardenServer.UnitedStates.Name : _identity.Host;
         if (_identity.Scheme != Uri.UriSchemeHttps || _api.Scheme != Uri.UriSchemeHttps)
             throw new ArgumentException("Bitwarden server URLs must use https.");
         _http = new HttpClient(handler ?? new SocketsHttpHandler
@@ -43,6 +50,9 @@ public sealed class BitwardenApi : IDisposable
     }
 
     public string Server => _identity.AbsoluteUri;
+
+    /// <summary>The server as people know it, such as bitwarden.eu, for messages.</summary>
+    public string Name { get; }
 
     public async Task<TokenResponse> LoginAsync(ApiCredentials credentials, CancellationToken ct = default)
     {

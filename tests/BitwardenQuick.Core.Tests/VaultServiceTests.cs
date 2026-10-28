@@ -60,6 +60,26 @@ public sealed class VaultServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Switching_server_forgets_the_account_in_memory_but_keeps_the_stored_one()
+    {
+        using (var service = await SetUpService())
+        {
+            service.UseServer(new BitwardenApi(BitwardenServer.Europe, _server));
+            Assert.False(service.IsConfigured);
+            Assert.False(service.IsUnlocked);
+            Assert.Null(service.Current);
+            Assert.Equal("bitwarden.eu", service.ServerName);
+
+            var e = Assert.Throws<SetupException>(service.LoadAccount);
+            Assert.Contains("identity.test", e.Message);
+        }
+
+        using var restarted = NewService();
+        restarted.LoadAccount();
+        Assert.True(Unlock(restarted, MasterPassword));
+    }
+
+    [Fact]
     public async Task Generates_one_time_passwords_from_the_items_authenticator_key()
     {
         _server.AddLogin("t1", _server.UserKey, "With TOTP", "me", "pw", "https://totp.test",

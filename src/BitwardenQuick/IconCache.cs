@@ -31,7 +31,7 @@ internal sealed class IconCache : IDisposable
         public bool IsStale => DateTimeOffset.UtcNow - Fetched > (Png is null ? MissingLifetime : IconLifetime);
     }
 
-    private readonly IconClient _client;
+    private IconClient _client;
     private readonly VaultService _service;
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private readonly DispatcherTimer _saveTimer;
@@ -77,6 +77,14 @@ internal sealed class IconCache : IDisposable
     {
         Save();
         Clear();
+    }
+
+    /// <summary>Fetches from another icon server from now on; only used before setup, when nothing is cached yet.</summary>
+    public void UseServer(IconClient client)
+    {
+        Clear();
+        _client.Dispose();
+        _client = client;
     }
 
     /// <summary>Forgets every icon without saving, for when the stored data is being deleted.</summary>

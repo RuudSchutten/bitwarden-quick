@@ -26,6 +26,8 @@ public partial class App : Application
     private SetupWindow? _setup;
     private ClipboardGuard? _clipboard;
     private IconCache? _icons;
+    private BitwardenServer _server = BitwardenServer.UnitedStates;
+    private bool _serverFromEnvironment;
     private DispatcherTimer? _syncTimer;
     private DispatcherTimer? _idleTimer;
     private bool _unlocking;
@@ -47,35 +49,34 @@ public partial class App : Application
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showSignal,
             (_, _) => Dispatcher.BeginInvoke(ShowQuick), null, Timeout.Infinite, executeOnlyOnce: false);
 
-        BitwardenApi api;
-        IconClient iconClient;
-        Uri webVault;
-        try
-        {
-            var server = Environment.GetEnvironmentVariable("BITWARDENQUICK_SERVER");
-            api = CreateApi(server);
-            iconClient = CreateIconClient(server);
-            webVault = string.IsNullOrWhiteSpace(server) ? new Uri("https://vault.bitwarden.com/") : new Uri(server.TrimEnd('/') + "/");
-        }
-        catch (Exception ex) when (ex is ArgumentException or UriFormatException)
-        {
-            MessageBox.Show($"BITWARDENQUICK_SERVER is not a valid https URL. {ex.Message}", "BitwardenQuick", MessageBoxButton.OK, MessageBoxImage.Error);
-            Shutdown();
-            return;
-        }
-
         AppDomain.CurrentDomain.UnhandledException += (_, _) => _clipboard?.ClearAfterCrash();
         RemoveOldInstall();
 
         var store = new SecureStore(Environment.GetEnvironmentVariable("BITWARDENQUICK_DATA_DIR"));
         _settings = AppSettings.Load(store.Directory);
-        _service = new VaultService(store, api);
+
+        var environmentServer = Environment.GetEnvironmentVariable("BITWARDENQUICK_SERVER");
+        _serverFromEnvironment = !string.IsNullOrWhiteSpace(environmentServer);
+        var configured = _serverFromEnvironment ? environmentServer : _settings.Server;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(configured)) _server = BitwardenServer.Parse(configured);
+        }
+        catch (ArgumentException ex)
+        {
+            var source = _serverFromEnvironment ? "BITWARDENQUICK_SERVER" : "\"Server\" in settings.json";
+            MessageBox.Show($"{source} is not valid. {ex.Message}", "BitwardenQuick", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+            return;
+        }
+
+        _service = new VaultService(store, new BitwardenApi(_server));
         _service.Changed += () => Dispatcher.BeginInvoke(OnVaultChanged);
 
         _hotKey = new HotKey();
         _clipboard = new ClipboardGuard(() => _hotKey.Handle);
-        _icons = new IconCache(iconClient, _service) { Enabled = _settings.ShowWebsiteIcons };
-        _quick = new QuickWindow(_service, _settings, _clipboard, _icons, webVault);
+        _icons = new IconCache(new IconClient(_server.Icons), _service) { Enabled = _settings.ShowWebsiteIcons };
+        _quick = new QuickWindow(_service, _settings, _clipboard, _icons, _server.WebVault);
         _quick.SetupRequested += () => ShowSetup(null);
         _quick.SyncRequested += () => _ = SyncAsync(force: false);
         _quick.Prewarm();
@@ -155,16 +156,15 @@ public partial class App : Application
         _ = WindowsHello.DeleteAsync(oldName);
     }
 
-    /// <summary>A self-hosted style base URL serves identity under /identity and the API under /api.</summary>
-    private static BitwardenApi CreateApi(string? server)
+    /// <summary>Points sign-in, sync, icons and web vault links at another server, before setup signs in to it.</summary>
+    private void UseServer(BitwardenServer server)
     {
-        if (string.IsNullOrWhiteSpace(server)) return new BitwardenApi();
-        var root = server.TrimEnd('/');
-        return new BitwardenApi(new Uri(root + "/identity/"), new Uri(root + "/api/"));
+        if (server == _server) return;
+        _server = server;
+        _icons!.UseServer(new IconClient(server.Icons));
+        _service!.UseServer(new BitwardenApi(server));
+        _quick!.WebVault = server.WebVault;
     }
-
-    private static IconClient CreateIconClient(string? server) =>
-        string.IsNullOrWhiteSpace(server) ? new IconClient() : new IconClient(new Uri(server.TrimEnd('/') + "/icons/"));
 
     private async void ShowQuick()
     {
@@ -238,7 +238,8 @@ public partial class App : Application
             return;
         }
         _quick?.Hide();
-        _setup = new SetupWindow(_service!, reason);
+        _setup = new SetupWindow(_service!, reason, _server, canChooseRegion: !_serverFromEnvironment && _server.IsCloud);
+        _setup.ServerChosen += UseServer;
         _setup.SourceInitialized += (_, _) =>
         {
             WindowEffects.ApplyFluent(_setup, Theme.IsDark, acrylic: false);
@@ -246,6 +247,11 @@ public partial class App : Application
         };
         _setup.Completed += async () =>
         {
+            if (!_serverFromEnvironment)
+            {
+                _settings!.Server = _server.IsCloud ? _server.Name : _server.WebVault.AbsoluteUri.TrimEnd('/');
+                _settings.Save();
+            }
             await EnrollHelloAsync();
             _tray?.Notify("BitwardenQuick is ready", $"Press {_settings!.Hotkey} to search your vault.");
             _ = Dispatcher.BeginInvoke(() => _quick?.ShowQuick(), DispatcherPriority.Background);
