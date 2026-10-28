@@ -4,6 +4,12 @@ Search your Bitwarden vault from anywhere in Windows, similar to Quick Access in
 
 Unofficial; not affiliated with Bitwarden.
 
+![Searching the vault](docs/screenshot-search.png)
+
+Press `→` on a result for more actions:
+
+![More actions for an item](docs/screenshot-actions.png)
+
 ## Usage
 
 | Key | Action |
@@ -69,6 +75,8 @@ for your master password.
   Bitwarden stores it, and with a key derived from a Windows Hello signature. The API client secret is
   encrypted with the user key. All of it is wrapped once more with DPAPI in `%LOCALAPPDATA%\BitwardenQuick`.
 - The local vault copy is Bitwarden's encrypted sync data, wrapped once more with DPAPI.
+- The data folder is limited to your Windows account and SYSTEM. BitwardenQuick refuses a data folder that another
+  user owns or that is a link to another location.
 - Vault keys are kept encrypted in memory with `CryptProtectMemory`. Passwords are decrypted only when copied
   and go to the clipboard without passing through a managed string.
 - Copied passwords are excluded from clipboard history (Win+V) and cloud clipboard, and are cleared after
