@@ -32,6 +32,7 @@ internal static class Theme
         Set(resources, "FooterBrush", dark ? "#0DFFFFFF" : "#08000000");
         Set(resources, "KeyBrush", dark ? "#1FFFFFFF" : "#FFFFFFFF");
         Set(resources, "KeyBorderBrush", dark ? "#33FFFFFF" : "#26000000");
+        Set(resources, "IconTileBrush", dark ? "#FFF3F3F3" : "#FFFFFFFF");
         Set(resources, "ErrorBrush", dark ? "#FFFF8A80" : "#FFC42B1C");
     }
 

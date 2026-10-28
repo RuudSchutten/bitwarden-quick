@@ -25,6 +25,7 @@ public partial class App : Application
     private QuickWindow? _quick;
     private SetupWindow? _setup;
     private ClipboardGuard? _clipboard;
+    private IconCache? _icons;
     private DispatcherTimer? _syncTimer;
     private DispatcherTimer? _idleTimer;
     private bool _unlocking;
@@ -47,9 +48,12 @@ public partial class App : Application
             (_, _) => Dispatcher.BeginInvoke(ShowQuick), null, Timeout.Infinite, executeOnlyOnce: false);
 
         BitwardenApi api;
+        IconClient iconClient;
         try
         {
-            api = CreateApi(Environment.GetEnvironmentVariable("BITWARDENQUICK_SERVER"));
+            var server = Environment.GetEnvironmentVariable("BITWARDENQUICK_SERVER");
+            api = CreateApi(server);
+            iconClient = CreateIconClient(server);
         }
         catch (Exception ex) when (ex is ArgumentException or UriFormatException)
         {
@@ -68,7 +72,8 @@ public partial class App : Application
 
         _hotKey = new HotKey();
         _clipboard = new ClipboardGuard(() => _hotKey.Handle);
-        _quick = new QuickWindow(_service, _settings, _clipboard);
+        _icons = new IconCache(iconClient) { Enabled = _settings.ShowWebsiteIcons };
+        _quick = new QuickWindow(_service, _settings, _clipboard, _icons);
         _quick.SetupRequested += () => ShowSetup(null);
         _quick.SyncRequested += () => _ = SyncAsync(force: false);
         _quick.Prewarm();
@@ -156,6 +161,9 @@ public partial class App : Application
         return new BitwardenApi(new Uri(root + "/identity/"), new Uri(root + "/api/"));
     }
 
+    private static IconClient CreateIconClient(string? server) =>
+        string.IsNullOrWhiteSpace(server) ? new IconClient() : new IconClient(new Uri(server.TrimEnd('/') + "/icons/"));
+
     private async void ShowQuick()
     {
         if (_setup is not null)
@@ -216,6 +224,7 @@ public partial class App : Application
         _clipboard?.ClearNow();
         _quick?.Hide();
         _service.Lock();
+        _icons?.Clear();
     }
 
     private void ShowSetup(string? reason)
@@ -277,6 +286,7 @@ public partial class App : Application
 
         _clipboard?.ClearNow();
         _service?.SignOut();
+        _icons?.Clear();
         _ = WindowsHello.DeleteAsync();
         _settings!.Recent.Clear();
         _settings.Save();
@@ -312,6 +322,7 @@ public partial class App : Application
         _showWait?.Unregister(null);
         _hotKey?.Dispose();
         _tray?.Dispose();
+        _icons?.Dispose();
         _service?.Dispose();
         _instance?.Dispose();
         base.OnExit(e);

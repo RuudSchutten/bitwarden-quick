@@ -9,13 +9,17 @@ using BitwardenQuick.Native;
 
 namespace BitwardenQuick;
 
-public sealed class ResultItem
+public sealed class ResultItem : INotifyPropertyChanged
 {
+    private ImageSource? _icon;
+
     public ResultItem(VaultEntry entry)
     {
         Entry = entry;
         Avatar = Theme.AvatarFor(entry.Host ?? entry.Name);
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public VaultEntry Entry { get; }
     public string Name => Entry.Name;
@@ -23,6 +27,22 @@ public sealed class ResultItem
     public string Initial => Entry.Initial;
     public string? Organization => Entry.OrganizationName;
     public Brush Avatar { get; }
+
+    public ImageSource? Icon
+    {
+        get => _icon;
+        set
+        {
+            if (ReferenceEquals(_icon, value)) return;
+            _icon = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IconVisibility)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(InitialVisibility)));
+        }
+    }
+
+    public Visibility IconVisibility => _icon is null ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility InitialVisibility => _icon is null ? Visibility.Visible : Visibility.Collapsed;
     public Visibility SubtitleVisibility => Subtitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     public Visibility OrganizationVisibility => Organization is null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility RepromptVisibility => Entry.Reprompt ? Visibility.Visible : Visibility.Collapsed;
@@ -33,6 +53,7 @@ public partial class QuickWindow : Window
     private readonly VaultService _service;
     private readonly AppSettings _settings;
     private readonly ClipboardGuard _clipboard;
+    private readonly IconCache _icons;
     private readonly bool _acrylic = WindowEffects.SupportsBackdrop;
     private bool _modal;
     private bool _syncing;
@@ -40,11 +61,12 @@ public partial class QuickWindow : Window
     internal event Action? SetupRequested;
     internal event Action? SyncRequested;
 
-    internal QuickWindow(VaultService service, AppSettings settings, ClipboardGuard clipboard)
+    internal QuickWindow(VaultService service, AppSettings settings, ClipboardGuard clipboard, IconCache icons)
     {
         _service = service;
         _settings = settings;
         _clipboard = clipboard;
+        _icons = icons;
         InitializeComponent();
 
         SourceInitialized += (_, _) =>
@@ -142,6 +164,13 @@ public partial class QuickWindow : Window
                 : "Your vault has no logins yet.";
         EmptyText.Visibility = items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         UpdateStatus();
+    }
+
+    /// <summary>Runs when a row is realized, so icons are only fetched for rows that are shown.</summary>
+    private async void OnResultRealized(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is not ResultItem { Icon: null } item || _icons.Get(item.Entry.Uri) is not { } icon) return;
+        item.Icon = await icon;
     }
 
     private void UpdateStatus()

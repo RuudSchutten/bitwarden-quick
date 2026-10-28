@@ -51,6 +51,10 @@ for your master password.
 - After three wrong master passwords, each further attempt waits longer, up to 32 seconds.
 - NuGet dependencies are pinned by content hash in `packages.lock.json`.
 - The server's KDF settings are checked against Bitwarden's bounds.
+- Website icons come from Bitwarden's icon service (`icons.bitwarden.net`, or `/icons` on a self-hosted server),
+  like in Bitwarden's own apps. That service sees the host names of your logins, never other item data. Addresses
+  on a local network (IP addresses, `localhost`, `.local`, `.lan`, `.internal`, names without a dot) are not sent.
+  Icons are kept in memory only and are dropped when BitwardenQuick locks.
 
 ### Limitations
 
@@ -65,7 +69,7 @@ for your master password.
 ## Settings
 
 `%LOCALAPPDATA%\BitwardenQuick\settings.json`: `Hotkey`, `ClipboardClearSeconds`, `LockAfterIdleMinutes`
-(`0` disables the idle lock), `HideFromScreenCapture`.
+(`0` disables the idle lock), `HideFromScreenCapture`, `ShowWebsiteIcons`.
 Lock, and sign out and delete all local data, from the tray icon menu.
 
 For a self-hosted server, set `BITWARDENQUICK_SERVER` to its base URL (https only) before setup. An account set up

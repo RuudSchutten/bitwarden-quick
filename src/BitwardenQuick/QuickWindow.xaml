@@ -67,15 +67,22 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type local:ResultItem}">
-                        <Grid>
+                        <Grid DataContextChanged="OnResultRealized">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Border Width="32" Height="32" CornerRadius="7" Background="{Binding Avatar}" Margin="0,0,12,0">
+                            <Border Width="32" Height="32" CornerRadius="7" Background="{Binding Avatar}" Margin="0,0,12,0"
+                                    Visibility="{Binding InitialVisibility}">
                                 <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="15" FontWeight="SemiBold"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Border Width="32" Height="32" CornerRadius="7" Background="{DynamicResource IconTileBrush}"
+                                    BorderBrush="{DynamicResource KeyBorderBrush}" BorderThickness="1" Margin="0,0,12,0"
+                                    Visibility="{Binding IconVisibility}">
+                                <Image Source="{Binding Icon}" Width="20" Height="20" Stretch="Uniform"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
