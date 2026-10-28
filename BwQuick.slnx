@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/BwQuick.Core/BwQuick.Core.csproj" />
-    <Project Path="src/BwQuick/BwQuick.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/BwQuick.Core.Tests/BwQuick.Core.Tests.csproj" />
-  </Folder>
-</Solution>

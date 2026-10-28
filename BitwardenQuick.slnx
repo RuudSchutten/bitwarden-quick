@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BitwardenQuick.Core/BitwardenQuick.Core.csproj" />
+    <Project Path="src/BitwardenQuick/BitwardenQuick.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BitwardenQuick.Core.Tests/BitwardenQuick.Core.Tests.csproj" />
+  </Folder>
+</Solution>

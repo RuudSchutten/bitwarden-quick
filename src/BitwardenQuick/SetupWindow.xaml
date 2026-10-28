@@ -1,0 +1,32 @@
+<Window x:Class="BitwardenQuick.SetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Set up BitwardenQuick" Width="500" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource WindowBrush}"
+        FontFamily="Segoe UI Variable Text, Segoe UI">
+    <StackPanel Margin="28,24,28,26">
+        <TextBlock Text="Connect your Bitwarden vault" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" />
+        <TextBlock x:Name="Intro" Margin="0,8,0,4" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource MutedBrush}">
+            Find your personal API key on vault.bitwarden.com under
+            <Run FontWeight="SemiBold">Settings › Security › Keys › View API key</Run>.
+            Your master password is only used now to derive your vault key and is never stored.
+        </TextBlock>
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="client_id" />
+        <TextBox x:Name="ClientId" Style="{StaticResource Field}" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="client_secret" />
+        <PasswordBox x:Name="ClientSecret" Style="{StaticResource Field}" />
+
+        <TextBlock Style="{StaticResource FieldLabel}" Text="Master password" />
+        <PasswordBox x:Name="MasterPassword" Style="{StaticResource Field}" />
+
+        <CheckBox x:Name="Autostart" Margin="0,16,0,0" IsChecked="True" Foreground="{DynamicResource TextBrush}"
+                  Content="Start with Windows" FontSize="13" />
+
+        <TextBlock x:Name="Status" Margin="0,16,0,0" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource MutedBrush}" />
+
+        <Button x:Name="Connect" Margin="0,16,0,0" HorizontalAlignment="Right" Content="Connect"
+                Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnConnect" />
+    </StackPanel>
+</Window>
