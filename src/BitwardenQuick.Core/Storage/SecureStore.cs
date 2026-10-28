@@ -60,7 +60,9 @@ public sealed class SecureStore
 
         using var identity = WindowsIdentity.GetCurrent();
         var user = identity.User ?? throw new UnauthorizedAccessException("The current Windows user has no SID.");
-        if (folder.GetAccessControl(AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier)) != user)
+        // An elevated administrator creates folders owned by the Administrators group, which is then the token's owner.
+        var owner = folder.GetAccessControl(AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier));
+        if (owner != user && owner != identity.Owner)
             throw new UnauthorizedAccessException($"The data folder {path} belongs to another user.");
 
         var security = new DirectorySecurity();
