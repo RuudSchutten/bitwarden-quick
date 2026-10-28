@@ -30,6 +30,8 @@ internal sealed class TrayIcon : IDisposable
         });
 
         var menu = new ContextMenuStrip();
+        menu.Items.Add(new ToolStripMenuItem($"BitwardenQuick {App.Version}") { Enabled = false });
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_openItem);
         menu.Items.Add(new ToolStripMenuItem("Sync now", null, (_, _) => SyncRequested?.Invoke()));
         menu.Items.Add(new ToolStripMenuItem("Lock", null, (_, _) => LockRequested?.Invoke()));

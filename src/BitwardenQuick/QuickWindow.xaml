@@ -221,7 +221,11 @@
 
             <StackPanel x:Name="ShortcutsPanel" Visibility="Collapsed">
                 <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="22,12,22,4">
-                    <TextBlock Text="Keyboard shortcuts" FontSize="14" FontWeight="SemiBold" />
+                    <DockPanel>
+                        <TextBlock x:Name="VersionText" DockPanel.Dock="Right" FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource MutedBrush}" />
+                        <TextBlock Text="Keyboard shortcuts" FontSize="14" FontWeight="SemiBold" />
+                    </DockPanel>
                 </Border>
                 <ItemsControl x:Name="ShortcutList" Margin="22,4,22,12" Focusable="False">
                     <ItemsControl.ItemTemplate>

@@ -12,7 +12,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>BitwardenQuick</AssemblyName>
-    <Version>1.0.0</Version>
+    <VersionPrefix>0.0.0</VersionPrefix>
+    <VersionSuffix>dev</VersionSuffix>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <TieredPGO>true</TieredPGO>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

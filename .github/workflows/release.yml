@@ -1,0 +1,95 @@
+name: Release
+
+# Push a tag like v1.4.0 (or v1.4.0-beta.1 for a pre-release) to build, test and publish a GitHub release
+# with the installer and a portable zip. Run it by hand to only build and keep the files as a workflow artifact.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME -replace '^v', ''
+            if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+              throw "Tag '$env:GITHUB_REF_NAME' is not a version like v1.4.0 or v1.4.0-beta.1."
+            }
+          } else {
+            $version = "0.0.0-ci.$env:GITHUB_RUN_NUMBER"
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Test
+        run: dotnet test tests/BitwardenQuick.Core.Tests -c Release -p:RestoreLockedMode=true
+
+      - name: Publish
+        run: >
+          dotnet publish src/BitwardenQuick -c Release -r win-x64 --self-contained false
+          -p:PublishReadyToRun=true -p:RestoreLockedMode=true -p:Version=${{ env.VERSION }} -o publish
+
+      - name: Portable zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Get-ChildItem publish -Exclude *.pdb | Compress-Archive -DestinationPath "dist/BitwardenQuick-$env:VERSION-win-x64.zip"
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Installing Inno Setup failed.' }
+          }
+          $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DVersion=$env:VERSION" "/DSourceDir=$env:GITHUB_WORKSPACE\publish" installer\BitwardenQuick.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Building the installer failed.' }
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -File | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content dist/SHA256SUMS.txt -Encoding ascii
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $flags = @('--title', "BitwardenQuick $env:VERSION", '--generate-notes', '--verify-tag')
+          if ($env:VERSION -like '*-*') { $flags += '--prerelease' }
+          gh release create $env:GITHUB_REF_NAME (Get-ChildItem dist -File).FullName @flags
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the release failed.' }
+
+      - name: Keep files
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: BitwardenQuick-${{ env.VERSION }}
+          path: dist/

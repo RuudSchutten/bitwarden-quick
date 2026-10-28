@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using System.Reflection;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Threading;
 using BitwardenQuick.Core;
@@ -32,6 +33,11 @@ public partial class App : Application
     private DispatcherTimer? _idleTimer;
     private bool _unlocking;
 
+    /// <summary>The release version, such as 1.4.0; 0.0.0-dev for a local build.</summary>
+    internal static string Version { get; } =
+        (typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0")
+        .Split('+')[0];
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -54,6 +60,14 @@ public partial class App : Application
 
         var store = new SecureStore(Environment.GetEnvironmentVariable("BITWARDENQUICK_DATA_DIR"));
         _settings = AppSettings.Load(store.Directory);
+        try
+        {
+            // After an update to another folder, Windows would otherwise keep starting the old copy.
+            if (AppSettings.StartWithWindows) AppSettings.StartWithWindows = true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
 
         var environmentServer = Environment.GetEnvironmentVariable("BITWARDENQUICK_SERVER");
         _serverFromEnvironment = !string.IsNullOrWhiteSpace(environmentServer);

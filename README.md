@@ -21,12 +21,33 @@ Unofficial; not affiliated with Bitwarden.
 | `Ctrl+Shift+/` or `F1` | Keyboard shortcuts |
 | `Esc` | Close |
 
-Run `publish\BitwardenQuick.exe`. On first start BitwardenQuick asks for your region (bitwarden.com or
-bitwarden.eu), your personal API key (vault.bitwarden.com or vault.bitwarden.eu › Settings › Security › Keys ›
-View API key) and your master password.
-After that it starts with Windows and runs in the system tray.
+## Install
 
-Build:
+Download `BitwardenQuick-<version>-setup.exe` from the latest GitHub release and run it. It installs for your
+Windows account only (no administrator rights) into `%LOCALAPPDATA%\Programs\BitwardenQuick`, and needs the
+[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64); setup says so when it is
+missing. Running setup again updates BitwardenQuick and keeps your data. The release also has a portable zip and
+`SHA256SUMS.txt`. The files are not code-signed, so Windows SmartScreen may ask you to confirm.
+
+On first start BitwardenQuick asks for your region (bitwarden.com or bitwarden.eu), your personal API key
+(vault.bitwarden.com or vault.bitwarden.eu › Settings › Security › Keys › View API key) and your master password.
+After that it starts with Windows and runs in the system tray. The version is shown in the tray icon menu and on
+the keyboard shortcuts page.
+
+## Release
+
+Push a version tag; the `Release` workflow tests, builds and publishes a GitHub release with the installer:
+
+```
+git tag v1.4.0
+git push origin v1.4.0
+```
+
+A tag with a suffix, such as `v1.4.0-beta.1`, becomes a pre-release. Running the workflow by hand only builds, and
+keeps the files as a workflow artifact.
+
+## Build
+
 
 ```
 dotnet publish src\BitwardenQuick -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -p:RestoreLockedMode=true -o publish

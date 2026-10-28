@@ -118,6 +118,7 @@ public partial class QuickWindow : Window
                 Style = (Style)FindResource("KeyCap"),
                 Child = new TextBlock { Style = (Style)FindResource("KeyText"), Text = key },
             });
+        VersionText.Text = $"BitwardenQuick {App.Version}";
         ShortcutList.ItemsSource = new ShortcutInfo[]
         {
             new("Show BitwardenQuick", hotkey),
