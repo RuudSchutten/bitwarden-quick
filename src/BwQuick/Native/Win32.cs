@@ -6,7 +6,7 @@ internal static partial class Win32
 {
     public const int WM_HOTKEY = 0x0312;
     public const uint MOD_ALT = 0x1, MOD_CONTROL = 0x2, MOD_SHIFT = 0x4, MOD_WIN = 0x8, MOD_NOREPEAT = 0x4000;
-    public const uint CF_UNICODETEXT = 13;
+    public const uint CF_TEXT = 1, CF_OEMTEXT = 7, CF_UNICODETEXT = 13;
     public const uint GMEM_MOVEABLE = 0x0002;
     public const int GWL_EXSTYLE = -20, GWL_STYLE = -16;
     public const nint WS_SYSMENU = 0x80000;

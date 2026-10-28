@@ -205,7 +205,11 @@ public partial class App : Application
         }
         _quick?.Hide();
         _setup = new SetupWindow(_service!, reason);
-        _setup.SourceInitialized += (_, _) => WindowEffects.ApplyFluent(_setup, Theme.IsDark, acrylic: false);
+        _setup.SourceInitialized += (_, _) =>
+        {
+            WindowEffects.ApplyFluent(_setup, Theme.IsDark, acrylic: false);
+            WindowEffects.ExcludeFromCapture(_setup, true);
+        };
         _setup.Completed += async () =>
         {
             await EnrollHelloAsync();

@@ -12,6 +12,7 @@ internal static class SecureClipboard
     private static readonly uint ExcludeFromMonitoring = Win32.RegisterClipboardFormat("ExcludeClipboardContentFromMonitorProcessing");
     private static readonly uint CanIncludeInHistory = Win32.RegisterClipboardFormat("CanIncludeInClipboardHistory");
     private static readonly uint CanUploadToCloud = Win32.RegisterClipboardFormat("CanUploadToCloudClipboard");
+    private static readonly uint[] TextFormats = [Win32.CF_UNICODETEXT, Win32.CF_TEXT, Win32.CF_OEMTEXT];
 
     /// <returns>The clipboard sequence number after the write, to detect later changes by others.</returns>
     public static uint SetText(nint owner, ReadOnlySpan<char> text, bool sensitive)
@@ -65,15 +66,16 @@ internal static class SecureClipboard
         {
             // Opening can wait for another program that is writing; only clear what is still ours.
             if (Win32.GetClipboardSequenceNumber() != sequence) return;
-            var handle = Win32.GetClipboardData(Win32.CF_UNICODETEXT);
-            if (handle != 0)
+            // Windows converts CF_UNICODETEXT to CF_TEXT and CF_OEMTEXT for programs that ask, and keeps
+            // those copies until the clipboard is emptied, so they are zeroed too.
+            foreach (var format in TextFormats)
             {
+                var handle = Win32.GetClipboardData(format);
+                if (handle == 0) continue;
                 var ptr = Win32.GlobalLock(handle);
-                if (ptr != 0)
-                {
-                    unsafe { new Span<byte>((void*)ptr, (int)Win32.GlobalSize(handle)).Clear(); }
-                    Win32.GlobalUnlock(handle);
-                }
+                if (ptr == 0) continue;
+                unsafe { new Span<byte>((void*)ptr, (int)Win32.GlobalSize(handle)).Clear(); }
+                Win32.GlobalUnlock(handle);
             }
             Win32.EmptyClipboard();
         }

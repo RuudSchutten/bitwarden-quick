@@ -22,7 +22,7 @@ After that it starts with Windows and runs in the system tray.
 Build:
 
 ```
-dotnet publish src\BwQuick -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -o publish
+dotnet publish src\BwQuick -c Release -r win-x64 --self-contained false -p:PublishReadyToRun=true -p:RestoreLockedMode=true -o publish
 ```
 
 ## Locking
@@ -45,9 +45,11 @@ for your master password.
   and go to the clipboard without passing through a managed string.
 - Copied passwords are excluded from clipboard history (Win+V) and cloud clipboard, and are cleared after
   30 seconds if they are still on the clipboard, when BwQuick locks, and when it crashes.
-- The search window is hidden from screen sharing and screen recordings.
+- The search window and the password dialogs are hidden from screen sharing and screen recordings.
 - Items with "Master password re-prompt" require Windows Hello (or the master password) before the password
   is copied. A master password is only accepted if it unwraps the key the vault is unlocked with.
+- After three wrong master passwords, each further attempt waits longer, up to 32 seconds.
+- NuGet dependencies are pinned by content hash in `packages.lock.json`.
 - The server's KDF settings are checked against Bitwarden's bounds.
 
 ### Limitations

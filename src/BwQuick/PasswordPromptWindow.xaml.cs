@@ -1,10 +1,12 @@
 using System.Windows;
 using BwQuick.Core.Crypto;
+using BwQuick.Native;
 
 namespace BwQuick;
 
 public partial class PasswordPromptWindow : Window
 {
+    private static int _failures;
     private readonly Func<Secret, bool> _verify;
 
     private PasswordPromptWindow(string title, string message, string button, Func<Secret, bool> verify)
@@ -14,6 +16,7 @@ public partial class PasswordPromptWindow : Window
         Title = title;
         Message.Text = message;
         Confirm.Content = button;
+        SourceInitialized += (_, _) => WindowEffects.ExcludeFromCapture(this, true);
         Loaded += (_, _) =>
         {
             Activate();
@@ -36,13 +39,15 @@ public partial class PasswordPromptWindow : Window
         using var secret = SecretInput.FromSecureString(Password.SecurePassword);
         Password.Clear();
         var ok = await Task.Run(() => _verify(secret));
-        Confirm.IsEnabled = true;
         if (ok)
         {
+            _failures = 0;
             DialogResult = true;
             return;
         }
         Error.Visibility = Visibility.Visible;
+        if (++_failures >= 3) await Task.Delay(TimeSpan.FromSeconds(1 << Math.Min(_failures - 3, 5)));
+        Confirm.IsEnabled = true;
         Password.Focus();
     }
 }

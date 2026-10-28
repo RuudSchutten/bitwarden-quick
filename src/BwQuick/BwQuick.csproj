@@ -16,6 +16,8 @@
     <TieredPGO>true</TieredPGO>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
