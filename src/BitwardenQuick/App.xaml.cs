@@ -58,7 +58,17 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, _) => _clipboard?.ClearAfterCrash();
         RemoveOldInstall();
 
-        var store = new SecureStore(Environment.GetEnvironmentVariable("BITWARDENQUICK_DATA_DIR"));
+        SecureStore store;
+        try
+        {
+            store = new SecureStore(Environment.GetEnvironmentVariable("BITWARDENQUICK_DATA_DIR"));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.IO.IOException)
+        {
+            MessageBox.Show($"BitwardenQuick cannot use its data folder. {ex.Message}", "BitwardenQuick", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+            return;
+        }
         _settings = AppSettings.Load(store.Directory);
         try
         {
@@ -114,7 +124,8 @@ public partial class App : Application
         _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _idleTimer.Tick += (_, _) =>
         {
-            if (_settings.LockAfterIdleMinutes > 0 && Win32.IdleTime >= TimeSpan.FromMinutes(_settings.LockAfterIdleMinutes))
+            if (_service is { IsUnlocked: true } && _settings.LockAfterIdleMinutes > 0
+                && Win32.IdleTime >= TimeSpan.FromMinutes(_settings.LockAfterIdleMinutes))
                 Lock();
         };
         _idleTimer.Start();
@@ -200,17 +211,25 @@ public partial class App : Application
         _unlocking = true;
         try
         {
+            var generation = service.LockGeneration;
             var enroll = service.HelloChallenge is null;
             if (service.HelloChallenge is { } challenge)
             {
                 var (status, signature) = await WindowsHello.SignAsync(challenge);
                 if (signature is not null && await Task.Run(() => service.UnlockWithHello(signature))) return true;
-                if (status == KeyCredentialStatus.UserCanceled) return false;
+                if (status == KeyCredentialStatus.UserCanceled || service.LockGeneration != generation) return false;
                 enroll = true;
             }
 
-            if (!PasswordPromptWindow.Ask(null, "Unlock BitwardenQuick", "Enter your master password to unlock your vault.",
-                    "Unlock", service.UnlockWithMasterPassword))
+            // A Windows lock while the password is being checked makes the unlock give up; close the prompt then too.
+            bool Verify(Core.Crypto.Secret password)
+            {
+                var before = service.LockGeneration;
+                return service.UnlockWithMasterPassword(password) || service.LockGeneration != before;
+            }
+
+            if (!PasswordPromptWindow.Ask(null, "Unlock BitwardenQuick", "Enter your master password to unlock your vault.", "Unlock", Verify)
+                || !service.IsUnlocked)
                 return false;
             if (enroll) await EnrollHelloAsync();
             return true;
@@ -235,11 +254,13 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Also runs while nothing is unlocked, so an unlock or setup in progress gives up instead of finishing.</summary>
     private void Lock()
     {
-        if (_service is not { IsUnlocked: true }) return;
+        if (_service is null) return;
         _clipboard?.ClearNow();
         _quick?.Hide();
+        _quick?.ForgetTarget();
         _icons?.Lock();
         _service.Lock();
     }
@@ -268,7 +289,8 @@ public partial class App : Application
             }
             await EnrollHelloAsync();
             _tray?.Notify("BitwardenQuick is ready", $"Press {_settings!.Hotkey} to search your vault.");
-            _ = Dispatcher.BeginInvoke(() => _quick?.ShowQuick(), DispatcherPriority.Background);
+            _quick?.ForgetTarget();
+            if (_service!.IsUnlocked) _ = Dispatcher.BeginInvoke(() => _quick?.ShowQuick(), DispatcherPriority.Background);
         };
         _setup.Closed += (_, _) => _setup = null;
         _setup.Show();
@@ -308,6 +330,7 @@ public partial class App : Application
         if (answer != MessageBoxResult.OK) return;
 
         _clipboard?.ClearNow();
+        _quick?.ForgetTarget();
         _service?.SignOut();
         _icons?.Clear();
         _ = WindowsHello.DeleteAsync();

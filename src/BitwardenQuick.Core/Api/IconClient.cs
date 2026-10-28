@@ -87,9 +87,17 @@ public sealed class IconClient : IDisposable
         await using var stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         var buffer = new byte[MaxBytes + 1];
         var length = 0;
-        int read;
-        while (length < buffer.Length && (read = await stream.ReadAsync(buffer.AsMemory(length), ct).ConfigureAwait(false)) > 0)
-            length += read;
+        try
+        {
+            int read;
+            while (length < buffer.Length && (read = await stream.ReadAsync(buffer.AsMemory(length), ct).ConfigureAwait(false)) > 0)
+                length += read;
+        }
+        catch (Exception e) when (e is InvalidDataException or InvalidOperationException)
+        {
+            // A body that does not match its Content-Encoding: gzip and deflate throw InvalidDataException, br InvalidOperationException.
+            return null;
+        }
         return length is 0 or > MaxBytes ? null : buffer[..length];
     }
 

@@ -1,4 +1,6 @@
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using BitwardenQuick.Core.Crypto;
 
@@ -41,7 +43,34 @@ public sealed class SecureStore
     {
         Directory = directory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BitwardenQuick");
-        System.IO.Directory.CreateDirectory(Directory);
+        RestrictToCurrentUser(Directory);
+    }
+
+    /// <summary>
+    /// The folder may be moved anywhere with BITWARDENQUICK_DATA_DIR, where other Windows users could otherwise write
+    /// settings.json or replace the data files. Refuses a folder someone else owns, and limits access to this user and SYSTEM.
+    /// </summary>
+    private static void RestrictToCurrentUser(string path)
+    {
+        var folder = new DirectoryInfo(path);
+        if (!folder.Exists) folder.Create();
+        folder.Refresh();
+        if (folder.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            throw new UnauthorizedAccessException($"The data folder {path} is a link to another location.");
+
+        using var identity = WindowsIdentity.GetCurrent();
+        var user = identity.User ?? throw new UnauthorizedAccessException("The current Windows user has no SID.");
+        if (folder.GetAccessControl(AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier)) != user)
+            throw new UnauthorizedAccessException($"The data folder {path} belongs to another user.");
+
+        var security = new DirectorySecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        foreach (var sid in new[] { user, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null) })
+        {
+            security.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl,
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+        }
+        folder.SetAccessControl(security);
     }
 
     public bool HasAccount => File.Exists(AccountPath);

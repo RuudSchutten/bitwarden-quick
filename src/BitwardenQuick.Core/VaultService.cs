@@ -22,6 +22,7 @@ public sealed class VaultService : IDisposable
     private SymmetricKey? _userKey;
     private Vault? _vault;
     private long _revision;
+    private long _lockGeneration;
     private string? _accessToken;
     private DateTimeOffset _accessTokenExpiry;
 
@@ -41,6 +42,9 @@ public sealed class VaultService : IDisposable
     public DateTimeOffset? LastSync { get; private set; }
     public string? LastError { get; private set; }
     public string? Email => _account?.Email;
+
+    /// <summary>Changes on every <see cref="Lock"/>, also while nothing is unlocked yet.</summary>
+    public long LockGeneration => Interlocked.Read(ref _lockGeneration);
     public string ServerName => _api.Name;
 
     /// <summary>
@@ -102,10 +106,11 @@ public sealed class VaultService : IDisposable
     public bool UnlockWithHello(ReadOnlySpan<byte> signature)
     {
         if (_account is not { HelloChallenge: { } challenge, HelloProtectedUserKey: { } wrapped }) return false;
+        var generation = LockGeneration;
         try
         {
             using var wrappingKey = HelloWrappingKey(signature, challenge);
-            return TryUnlock(wrappingKey.DecryptKey(EncString.Parse(wrapped)));
+            return TryUnlock(wrappingKey.DecryptKey(EncString.Parse(wrapped)), generation);
         }
         catch (Exception e) when (e is CryptographicException or NotSupportedException)
         {
@@ -116,10 +121,11 @@ public sealed class VaultService : IDisposable
     public bool UnlockWithMasterPassword(Secret password)
     {
         if (_account is not { } account) return false;
+        var generation = LockGeneration;
         try
         {
             using var masterKey = Kdf.DeriveMasterKey(password.Span, account.Email, account.Kdf);
-            return TryUnlock(Kdf.DecryptUserKey(masterKey.Span, EncString.Parse(account.ProtectedUserKey)));
+            return TryUnlock(Kdf.DecryptUserKey(masterKey.Span, EncString.Parse(account.ProtectedUserKey)), generation);
         }
         catch (Exception e) when (e is CryptographicException or NotSupportedException)
         {
@@ -127,7 +133,8 @@ public sealed class VaultService : IDisposable
         }
     }
 
-    private bool TryUnlock(SymmetricKey key)
+    /// <summary>Installs the key unless a lock was requested after <paramref name="generation"/> was read.</summary>
+    private bool TryUnlock(SymmetricKey key, long generation)
     {
         var account = _account;
         if (account is null)
@@ -162,7 +169,7 @@ public sealed class VaultService : IDisposable
 
         lock (_gate)
         {
-            if (!ReferenceEquals(_account, account))
+            if (!ReferenceEquals(_account, account) || _lockGeneration != generation)
             {
                 vault?.Dispose();
                 key.Dispose();
@@ -180,6 +187,7 @@ public sealed class VaultService : IDisposable
     {
         lock (_gate)
         {
+            Interlocked.Increment(ref _lockGeneration);
             if (_userKey is null) return;
             SwapVault(null, 0);
             ReplaceUserKey(null);
@@ -232,6 +240,7 @@ public sealed class VaultService : IDisposable
         CancellationToken ct = default)
     {
         var credentials = new ApiCredentials(clientId.Trim(), clientSecret.Trim(), Guid.NewGuid());
+        var generation = LockGeneration;
 
         progress?.Report($"Signing in to {_api.Name}…");
         TokenResponse token;
@@ -307,11 +316,20 @@ public sealed class VaultService : IDisposable
             _store.SaveAccount(account);
             _store.SaveVault(revision, json);
             _account = account;
-            _accessToken = token.AccessToken;
-            _accessTokenExpiry = ExpiryOf(token);
             NeedsSetup = false;
-            ReplaceUserKey(userKey);
-            SwapVault(vault, revision);
+            if (_lockGeneration == generation)
+            {
+                _accessToken = token.AccessToken;
+                _accessTokenExpiry = ExpiryOf(token);
+                ReplaceUserKey(userKey);
+                SwapVault(vault, revision);
+            }
+            else
+            {
+                // Windows locked or slept during setup: keep the account, but stay locked.
+                vault.Dispose();
+                userKey.Dispose();
+            }
         }
         LastSync = DateTimeOffset.Now;
         LastError = null;

@@ -60,6 +60,73 @@ public sealed class VaultServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Ciphers_that_share_an_Id_are_all_skipped()
+    {
+        _server.AddLogin("dup", _server.UserKey, "Example Bank", "ruud", "real-pass", "https://bank.example");
+        _server.AddLogin("dup", _server.OrgKey, "Team wiki", "team", "other-pass", "https://wiki.example", orgId: FakeBitwarden.OrgId);
+        using var service = await SetUpService();
+
+        Assert.Null(service.Current!.Find("dup"));
+        Assert.DoesNotContain(service.Current.Entries, e => e.Name is "Example Bank" or "Team wiki");
+        Assert.Equal(3, service.Current.SkippedItems);
+        Assert.Null(service.DecryptPassword("dup"));
+    }
+
+    [Fact]
+    public async Task A_lock_during_a_master_password_unlock_wins()
+    {
+        _server.Rewrap(_server.UserKey, MasterPassword, new KdfConfig(KdfType.Pbkdf2, 2_000_000));
+        using var service = await SetUpService();
+        service.Lock();
+
+        var unlock = Task.Run(() => Unlock(service, MasterPassword));
+        await Task.Delay(100);
+        Assert.False(unlock.IsCompleted);
+        service.Lock();
+
+        Assert.False(await unlock);
+        Assert.False(service.IsUnlocked);
+        Assert.Null(service.Current);
+        Assert.True(Unlock(service, MasterPassword));
+    }
+
+    [Fact]
+    public async Task A_lock_during_setup_keeps_the_account_but_stays_locked()
+    {
+        _server.Rewrap(_server.UserKey, MasterPassword, new KdfConfig(KdfType.Pbkdf2, 2_000_000));
+        using var service = NewService();
+        using var pw = Secret.FromChars(MasterPassword.AsSpan());
+
+        var setup = service.SetupAsync(FakeBitwarden.ClientId, FakeBitwarden.ClientSecret, pw);
+        await Task.Delay(300);
+        Assert.False(setup.IsCompleted);
+        service.Lock();
+        await setup;
+
+        Assert.True(service.IsConfigured);
+        Assert.False(service.IsUnlocked);
+        Assert.Null(service.Current);
+        Assert.True(Unlock(service, MasterPassword));
+        Assert.Equal("gh-pass", Password(service, "c1"));
+    }
+
+    [Fact]
+    public void The_data_folder_is_limited_to_the_current_user_and_SYSTEM()
+    {
+        _ = new SecureStore(_dir);
+        var rules = new DirectoryInfo(_dir).GetAccessControl()
+            .GetAccessRules(includeExplicit: true, includeInherited: true, typeof(System.Security.Principal.SecurityIdentifier))
+            .Cast<System.Security.AccessControl.FileSystemAccessRule>()
+            .Select(r => r.IdentityReference.Value)
+            .Distinct()
+            .Order()
+            .ToArray();
+        using var me = System.Security.Principal.WindowsIdentity.GetCurrent();
+        Assert.Equal(new[] { me.User!.Value, "S-1-5-18" }.Order().ToArray(), rules);
+        Assert.True(new DirectoryInfo(_dir).GetAccessControl().AreAccessRulesProtected);
+    }
+
+    [Fact]
     public async Task Switching_server_forgets_the_account_in_memory_but_keeps_the_stored_one()
     {
         using (var service = await SetUpService())

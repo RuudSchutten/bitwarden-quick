@@ -59,7 +59,15 @@ public sealed class ResultItem : INotifyPropertyChanged
 
     private async void LoadIcon()
     {
-        if (_icons?.Get(Entry.Uri) is { } icon) Icon = await icon;
+        if (_icons?.Get(Entry.Uri) is not { } icon) return;
+        try
+        {
+            Icon = await icon;
+        }
+        catch (Exception)
+        {
+            // An icon is decoration; a failure here must never take the app down.
+        }
     }
 
     public Visibility IconVisibility => _icon is null ? Visibility.Collapsed : Visibility.Visible;
@@ -149,6 +157,10 @@ public partial class QuickWindow : Window
             if (IsVisible) WindowEffects.PlaceOnCursorMonitor(this);
         };
         PreviewKeyDown += OnKey;
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible) ForgetTarget();
+        };
     }
 
     internal bool Acrylic => _acrylic;
@@ -176,8 +188,13 @@ public partial class QuickWindow : Window
     /// <summary>Remembers the window in front, before an unlock prompt takes its place, so Auto-Type can type into it.</summary>
     internal void RememberTarget()
     {
-        if (!IsVisible) _target = AutoType.ForegroundWindowOfOtherProcess();
+        // While a re-prompt keeps this window open the user may have moved to another window and pressed the hotkey there.
+        var window = AutoType.ForegroundWindowOfOtherProcess();
+        if (window != 0 || !IsVisible) _target = window;
     }
+
+    /// <summary>Auto-Type only types into a window chosen by pressing the hotkey for the current showing.</summary>
+    internal void ForgetTarget() => _target = 0;
 
     internal void ShowQuick()
     {

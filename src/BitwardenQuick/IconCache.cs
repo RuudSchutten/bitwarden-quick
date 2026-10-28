@@ -126,6 +126,16 @@ internal sealed class IconCache : IDisposable
         {
             return entry.Image;
         }
+        catch (Exception)
+        {
+            // Bytes from the icon service that no decoder accepts: remember the site as having no icon.
+            if (ct.IsCancellationRequested) return null;
+            entry.Image = null;
+            entry.Png = null;
+            entry.Fetched = DateTimeOffset.UtcNow;
+            MarkDirty();
+            return null;
+        }
         finally
         {
             entry.Pending = null;

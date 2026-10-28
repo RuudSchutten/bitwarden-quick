@@ -52,9 +52,22 @@ public sealed class Vault : IDisposable
                 }
             }
 
+            // Actions find an item again by its Id, so an Id the server sends twice would let one item stand in for another.
+            var duplicateIds = (sync.Ciphers ?? [])
+                .Where(c => c.Id is not null)
+                .GroupBy(c => c.Id!, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
             foreach (var cipher in sync.Ciphers ?? [])
             {
                 if (cipher.Type != LoginType || cipher.DeletedDate is not null || cipher.Id is null) continue;
+                if (duplicateIds.Contains(cipher.Id))
+                {
+                    skipped++;
+                    continue;
+                }
                 try
                 {
                     var entry = BuildEntry(cipher, userKey, orgKeys, owned);

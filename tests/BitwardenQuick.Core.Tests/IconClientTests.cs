@@ -17,6 +17,39 @@ public sealed class IconClientTests
         }
     }
 
+    private sealed class BrokenEncoding(Exception error) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) => throw error;
+
+        protected override Task<Stream> CreateContentReadStreamAsync() => Task.FromResult<Stream>(new Throwing(error));
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+
+        private sealed class Throwing(Exception error) : MemoryStream
+        {
+            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => throw error;
+        }
+    }
+
+    [Theory]
+    [InlineData("gzip")]
+    [InlineData("br")]
+    public async Task Returns_null_for_a_body_that_does_not_match_its_encoding(string encoding)
+    {
+        Exception error = encoding == "br" ? new InvalidOperationException("Decoder ran into invalid data.") : new InvalidDataException("bad gzip");
+        using var client = new IconClient(handler: new FakeIcons(_ =>
+        {
+            var content = new BrokenEncoding(error);
+            content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }));
+        Assert.Null(await client.GetAsync("example.com"));
+    }
+
     private sealed class UnknownLength(byte[] bytes) : MemoryStream(bytes)
     {
         public override bool CanSeek => false;
