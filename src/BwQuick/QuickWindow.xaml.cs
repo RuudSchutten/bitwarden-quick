@@ -136,10 +136,10 @@ public partial class QuickWindow : Window
         Results.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         EmptyText.Text = vault is null
-            ? "Kluis wordt geladen…"
+            ? "Loading vault…"
             : SearchBox.Text.Trim().Length > 0
-                ? $"Niets gevonden voor \"{SearchBox.Text.Trim()}\"."
-                : "Je kluis bevat nog geen logins.";
+                ? $"No results for \"{SearchBox.Text.Trim()}\"."
+                : "Your vault has no logins yet.";
         EmptyText.Visibility = items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
         UpdateStatus();
     }
@@ -156,7 +156,7 @@ public partial class QuickWindow : Window
         StatusText.Foreground = (Brush)Application.Current.Resources["MutedBrush"];
         StatusText.ToolTip = null;
         var count = _service.Current?.Entries.Count ?? 0;
-        StatusText.Text = _syncing ? "Synchroniseren…" : $"{count} items";
+        StatusText.Text = _syncing ? "Syncing…" : $"{count} items";
     }
 
     private void SetStatus(string text, bool error = false)
@@ -226,7 +226,7 @@ public partial class QuickWindow : Window
         var entry = item.Entry;
         if (!entry.HasPassword)
         {
-            SetStatus("Dit item heeft geen wachtwoord.", error: true);
+            SetStatus("This item has no password.", error: true);
             return;
         }
 
@@ -244,7 +244,7 @@ public partial class QuickWindow : Window
             }
             if (!confirmed)
             {
-                SetStatus("Niet bevestigd; er is niets gekopieerd.", error: true);
+                SetStatus("Not confirmed. Nothing was copied.", error: true);
                 Activate();
                 return;
             }
@@ -255,7 +255,7 @@ public partial class QuickWindow : Window
             using var secret = _service.DecryptPassword(entry.Id);
             if (secret is null)
             {
-                SetStatus("Item niet meer gevonden; probeer opnieuw.", error: true);
+                SetStatus("Item no longer exists. Try again.", error: true);
                 RunSearch();
                 return;
             }
@@ -272,7 +272,7 @@ public partial class QuickWindow : Window
         }
         catch (Exception ex) when (ex is ObjectDisposedException or System.Security.Cryptography.CryptographicException or Win32Exception)
         {
-            SetStatus(ex is Win32Exception ? ex.Message : "Ontsleutelen mislukt.", error: true);
+            SetStatus(ex is Win32Exception ? ex.Message : "Decryption failed.", error: true);
         }
     }
 
@@ -281,7 +281,7 @@ public partial class QuickWindow : Window
         if (Selected?.Entry is not { } entry) return;
         if (string.IsNullOrEmpty(entry.Username))
         {
-            SetStatus("Dit item heeft geen gebruikersnaam.", error: true);
+            SetStatus("This item has no username.", error: true);
             return;
         }
         CopyPlain(entry, entry.Username);
@@ -292,7 +292,7 @@ public partial class QuickWindow : Window
         if (Selected?.Entry is not { } entry) return;
         if (string.IsNullOrEmpty(entry.Uri))
         {
-            SetStatus("Dit item heeft geen website.", error: true);
+            SetStatus("This item has no website.", error: true);
             return;
         }
         CopyPlain(entry, entry.Uri);

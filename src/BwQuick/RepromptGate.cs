@@ -19,7 +19,7 @@ internal static class RepromptGate
             {
                 var hwnd = new WindowInteropHelper(owner).Handle;
                 var result = await UserConsentVerifierInterop.RequestVerificationForWindowAsync(
-                    hwnd, $"Bevestig dat je het wachtwoord van \"{itemName}\" wilt kopiëren.");
+                    hwnd, $"Confirm that you want to copy the password for \"{itemName}\".");
                 return result == UserConsentVerificationResult.Verified;
             }
         }

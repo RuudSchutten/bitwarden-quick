@@ -15,7 +15,7 @@
     <Version>1.0.0</Version>
     <TieredPGO>true</TieredPGO>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
-    <SatelliteResourceLanguages>en;nl</SatelliteResourceLanguages>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

@@ -64,7 +64,7 @@ public partial class App : Application
 
         _hotKey.Pressed += ShowQuick;
         if (!_hotKey.Register(_settings.Hotkey, out var hotkeyError))
-            _tray.Notify("Sneltoets niet beschikbaar", hotkeyError + " Pas \"Hotkey\" aan in settings.json.", error: true);
+            _tray.Notify("Hotkey unavailable", hotkeyError + " Change \"Hotkey\" in settings.json.", error: true);
 
         _syncTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
         _syncTimer.Tick += (_, _) => _ = SyncAsync(force: false);
@@ -86,7 +86,7 @@ public partial class App : Application
         }
         catch (Exception ex) when (ex is CryptographicException or System.IO.IOException or System.IO.InvalidDataException)
         {
-            ShowSetup("De opgeslagen gegevens konden niet worden geopend. Koppel je kluis opnieuw.");
+            ShowSetup("The saved data could not be opened. Connect your vault again.");
             return;
         }
 
@@ -125,7 +125,7 @@ public partial class App : Application
         _setup.SourceInitialized += (_, _) => WindowEffects.ApplyFluent(_setup, Theme.IsDark, acrylic: false);
         _setup.Completed += () =>
         {
-            _tray?.Notify("BwQuick is klaar", $"Druk op {_settings!.Hotkey} om je kluis te doorzoeken.");
+            _tray?.Notify("BwQuick is ready", $"Press {_settings!.Hotkey} to search your vault.");
             Dispatcher.BeginInvoke(() => _quick?.ShowQuick(), DispatcherPriority.Background);
         };
         _setup.Closed += (_, _) => _setup = null;
@@ -146,7 +146,7 @@ public partial class App : Application
             _quick?.SetSyncing(false);
         }
         if (_service.NeedsSetup)
-            _tray?.Notify("BwQuick opnieuw instellen", _service.LastError ?? "Koppel je kluis opnieuw.", error: true);
+            _tray?.Notify("BwQuick needs to be set up again", _service.LastError ?? "Connect your vault again.", error: true);
     }
 
     private void OnVaultChanged()
@@ -159,8 +159,8 @@ public partial class App : Application
     private void SignOut()
     {
         var answer = MessageBox.Show(
-            "Je API-key, kluissleutel en de lokale kopie van je kluis worden van deze pc verwijderd. Je Bitwarden-account zelf blijft ongewijzigd.",
-            "Uitloggen", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+            "Your API key, vault key and the local copy of your vault will be removed from this PC. Your Bitwarden account is not affected.",
+            "Sign out", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
         if (answer != MessageBoxResult.OK) return;
 
         _clipboard?.ClearNow();

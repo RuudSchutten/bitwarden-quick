@@ -62,12 +62,12 @@ public sealed class BitwardenApi : IDisposable
             try { detail = JsonSerializer.Deserialize(body, ApiJsonContext.Default.TokenError)?.ErrorDescription; }
             catch (JsonException) { }
             if (response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized)
-                throw new BitwardenAuthException(detail ?? "API-key wordt niet geaccepteerd.");
-            throw new HttpRequestException($"Inloggen mislukt ({(int)response.StatusCode}).", null, response.StatusCode);
+                throw new BitwardenAuthException(detail ?? "API key was rejected.");
+            throw new HttpRequestException($"Sign-in failed ({(int)response.StatusCode}).", null, response.StatusCode);
         }
 
         return JsonSerializer.Deserialize(body, ApiJsonContext.Default.TokenResponse)
-            ?? throw new HttpRequestException("Leeg antwoord van de server.");
+            ?? throw new HttpRequestException("Empty response from the server.");
     }
 
     public async Task<long> GetRevisionDateAsync(string accessToken, CancellationToken ct = default)
@@ -109,7 +109,7 @@ public sealed class BitwardenApi : IDisposable
         {
             var status = response.StatusCode;
             response.Dispose();
-            throw new HttpRequestException($"Bitwarden gaf {(int)status} terug.", null, status);
+            throw new HttpRequestException($"Bitwarden returned {(int)status}.", null, status);
         }
         return response;
     }

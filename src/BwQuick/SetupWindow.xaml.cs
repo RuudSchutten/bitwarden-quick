@@ -29,7 +29,7 @@ public partial class SetupWindow : Window
     {
         if (ClientId.Text.Trim().Length == 0 || ClientSecret.SecurePassword.Length == 0 || MasterPassword.SecurePassword.Length == 0)
         {
-            ShowStatus("Vul alle drie de velden in.", error: true);
+            ShowStatus("Fill in all three fields.", error: true);
             return;
         }
 
@@ -56,7 +56,7 @@ public partial class SetupWindow : Window
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            ShowStatus("Verbinden met bitwarden.com mislukt. Probeer het later opnieuw.", error: true);
+            ShowStatus("Could not connect to bitwarden.com. Try again later.", error: true);
         }
         finally
         {

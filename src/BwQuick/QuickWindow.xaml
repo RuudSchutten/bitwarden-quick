@@ -24,7 +24,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="16"
                                Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <TextBlock x:Name="Placeholder" Grid.Column="1" Text="Zoek in Bitwarden" FontSize="17"
+                    <TextBlock x:Name="Placeholder" Grid.Column="1" Text="Search Bitwarden" FontSize="17"
                                Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="2,0,0,0"
                                IsHitTestVisible="False" />
                     <TextBox x:Name="SearchBox" Grid.Column="1" FontSize="17" BorderThickness="0" Background="Transparent"
@@ -33,7 +33,7 @@
                              SelectionBrush="{DynamicResource AccentBrush}" />
                     <TextBlock x:Name="SyncIcon" Grid.Column="2" Text="&#xE895;" FontFamily="{StaticResource IconFont}"
                                FontSize="14" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"
-                               Margin="8,0,0,0" Visibility="Collapsed" ToolTip="Synchroniseren…" />
+                               Margin="8,0,0,0" Visibility="Collapsed" ToolTip="Syncing…" />
                 </Grid>
             </Border>
 
@@ -85,7 +85,7 @@
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
                                 <TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" FontSize="12" Opacity="0.75"
                                            VerticalAlignment="Center" Margin="0,0,8,0" Visibility="{Binding RepromptVisibility}"
-                                           ToolTip="Vraagt om bevestiging" />
+                                           ToolTip="Requires confirmation" />
                                 <Border CornerRadius="4" Padding="6,1" BorderThickness="1" BorderBrush="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
                                         Opacity="0.6" Visibility="{Binding OrganizationVisibility}" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Organization}" FontSize="11" />
@@ -104,10 +104,10 @@
                 <DockPanel LastChildFill="False">
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Enter" /></Border>
-                        <TextBlock Style="{StaticResource HintText}" Text="Wachtwoord" />
+                        <TextBlock Style="{StaticResource HintText}" Text="Password" />
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Ctrl" /></Border>
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="C" /></Border>
-                        <TextBlock Style="{StaticResource HintText}" Text="Gebruikersnaam" />
+                        <TextBlock Style="{StaticResource HintText}" Text="Username" />
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Ctrl" /></Border>
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="Shift" /></Border>
                         <Border Style="{StaticResource KeyCap}"><TextBlock Style="{StaticResource KeyText}" Text="U" /></Border>

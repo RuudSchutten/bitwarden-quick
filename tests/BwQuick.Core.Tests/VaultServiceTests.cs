@@ -44,7 +44,7 @@ public sealed class VaultServiceTests : IDisposable
         using var service = NewService();
         using var wrong = Secret.FromChars("nope".AsSpan());
         var e = await Assert.ThrowsAsync<SetupException>(() => service.SetupAsync(FakeBitwarden.ClientId, FakeBitwarden.ClientSecret, wrong));
-        Assert.Contains("hoofdwachtwoord", e.Message);
+        Assert.Contains("master password", e.Message);
         Assert.False(service.IsConfigured);
     }
 

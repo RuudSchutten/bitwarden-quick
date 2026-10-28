@@ -30,12 +30,12 @@ internal sealed class HotKey : IDisposable
 
         if (!TryParse(gesture, out var modifiers, out var vk))
         {
-            error = $"Sneltoets \"{gesture}\" wordt niet herkend.";
+            error = $"Hotkey \"{gesture}\" is not recognized.";
             return false;
         }
         if (!Win32.RegisterHotKey(Handle, Id, modifiers | Win32.MOD_NOREPEAT, vk))
         {
-            error = $"Sneltoets {gesture} is al in gebruik door een ander programma.";
+            error = $"Hotkey {gesture} is already in use by another program.";
             return false;
         }
         _registered = true;

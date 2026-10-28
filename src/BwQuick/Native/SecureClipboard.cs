@@ -88,7 +88,7 @@ internal static class SecureClipboard
             if (Win32.OpenClipboard(owner)) return;
             Thread.Sleep(15);
         }
-        throw new Win32Exception(Marshal.GetLastPInvokeError(), "Het klembord is in gebruik door een ander programma.");
+        throw new Win32Exception(Marshal.GetLastPInvokeError(), "The clipboard is in use by another program.");
     }
 
     private static void SetDword(uint format, int value)

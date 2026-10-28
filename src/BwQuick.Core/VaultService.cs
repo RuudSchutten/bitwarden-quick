@@ -65,7 +65,7 @@ public sealed class VaultService : IDisposable
     {
         var credentials = new ApiCredentials(clientId.Trim(), clientSecret.Trim(), Guid.NewGuid());
 
-        progress?.Report("Inloggen bij bitwarden.com…");
+        progress?.Report("Signing in to bitwarden.com…");
         TokenResponse token;
         try
         {
@@ -73,23 +73,23 @@ public sealed class VaultService : IDisposable
         }
         catch (BitwardenAuthException e)
         {
-            throw new SetupException($"Client ID of client secret klopt niet ({e.Message}).", e);
+            throw new SetupException($"Client ID or client secret is incorrect ({e.Message}).", e);
         }
         catch (HttpRequestException e)
         {
-            throw new SetupException("Kan bitwarden.com niet bereiken. Controleer je internetverbinding.", e);
+            throw new SetupException("Cannot reach bitwarden.com. Check your internet connection.", e);
         }
 
         if (token.ApiUseKeyConnector)
-            throw new SetupException("Dit account gebruikt Key Connector (geen hoofdwachtwoord); dat wordt niet ondersteund.");
+            throw new SetupException("This account uses Key Connector instead of a master password, which is not supported.");
 
-        progress?.Report("Kluis ophalen…");
+        progress?.Report("Fetching vault…");
         var revision = await _api.GetRevisionDateAsync(token.AccessToken, ct).ConfigureAwait(false);
         var json = await _api.SyncAsync(token.AccessToken, ct).ConfigureAwait(false);
         var sync = BitwardenApi.ParseSync(json);
 
-        var email = sync.Profile?.Email ?? throw new SetupException("Geen e-mailadres in het profiel gevonden.");
-        var protectedUserKey = token.Key ?? sync.Profile?.Key ?? throw new SetupException("Geen kluissleutel ontvangen.");
+        var email = sync.Profile?.Email ?? throw new SetupException("The profile has no email address.");
+        var protectedUserKey = token.Key ?? sync.Profile?.Key ?? throw new SetupException("No vault key received.");
         var kdf = new KdfConfig((KdfType)token.Kdf, token.KdfIterations, token.KdfMemory, token.KdfParallelism);
 
         try
@@ -98,10 +98,10 @@ public sealed class VaultService : IDisposable
         }
         catch (Exception e) when (e is CryptographicException or NotSupportedException)
         {
-            throw new SetupException($"Onveilige of onbekende KDF-instellingen van de server: {e.Message}", e);
+            throw new SetupException($"Unsafe or unknown KDF settings from the server: {e.Message}", e);
         }
 
-        progress?.Report("Hoofdwachtwoord controleren…");
+        progress?.Report("Checking master password…");
         SymmetricKey userKey;
         try
         {
@@ -113,11 +113,11 @@ public sealed class VaultService : IDisposable
         }
         catch (CryptographicException e)
         {
-            throw new SetupException("Onjuist hoofdwachtwoord.", e);
+            throw new SetupException("Incorrect master password.", e);
         }
         catch (NotSupportedException e)
         {
-            throw new SetupException($"Dit account gebruikt een versleuteling die nog niet ondersteund wordt: {e.Message}", e);
+            throw new SetupException($"This account uses an encryption type that is not supported yet: {e.Message}", e);
         }
 
         Vault vault;
@@ -178,7 +178,7 @@ public sealed class VaultService : IDisposable
                 catch (CryptographicException)
                 {
                     NeedsSetup = true;
-                    throw new SetupException("Je kluissleutel is gewijzigd. Stel BwQuick opnieuw in.");
+                    throw new SetupException("Your vault key has changed. Set up BwQuick again.");
                 }
                 // A master password change re-wraps the same user key; keep the new wrap for reprompt checks.
                 if (sync.Profile?.Key is { } wrapped && wrapped != _account.ProtectedUserKey)
@@ -196,7 +196,7 @@ public sealed class VaultService : IDisposable
         catch (BitwardenAuthException)
         {
             NeedsSetup = true;
-            LastError = "API-key is ingetrokken of gewijzigd. Stel BwQuick opnieuw in.";
+            LastError = "The API key was revoked or changed. Set up BwQuick again.";
         }
         catch (SetupException e)
         {
@@ -204,7 +204,7 @@ public sealed class VaultService : IDisposable
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            LastError = "Offline – laatst bekende kluis";
+            LastError = "Offline – showing the last synced vault";
         }
         finally
         {

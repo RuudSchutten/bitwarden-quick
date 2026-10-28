@@ -11,7 +11,7 @@ public partial class PasswordPromptWindow : Window
     {
         _service = service;
         InitializeComponent();
-        Message.Text = $"\"{itemName}\" vraagt om bevestiging met je hoofdwachtwoord. Windows Hello is op deze pc niet ingesteld.";
+        Message.Text = $"\"{itemName}\" requires your master password. Windows Hello is not set up on this PC.";
         Loaded += (_, _) => Password.Focus();
     }
 

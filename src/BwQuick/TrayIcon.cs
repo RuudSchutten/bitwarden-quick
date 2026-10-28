@@ -21,8 +21,8 @@ internal sealed class TrayIcon : IDisposable
     public TrayIcon()
     {
         _image = CreateIcon();
-        _openItem = new ToolStripMenuItem("Zoeken", null, (_, _) => OpenRequested?.Invoke()) { Font = new Font(SystemFonts.MenuFont!, System.Drawing.FontStyle.Bold) };
-        _autostartItem = new ToolStripMenuItem("Starten met Windows", null, (_, _) =>
+        _openItem = new ToolStripMenuItem("Search", null, (_, _) => OpenRequested?.Invoke()) { Font = new Font(SystemFonts.MenuFont!, System.Drawing.FontStyle.Bold) };
+        _autostartItem = new ToolStripMenuItem("Start with Windows", null, (_, _) =>
         {
             AppSettings.StartWithWindows = !AppSettings.StartWithWindows;
             _autostartItem!.Checked = AppSettings.StartWithWindows;
@@ -30,12 +30,12 @@ internal sealed class TrayIcon : IDisposable
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_openItem);
-        menu.Items.Add(new ToolStripMenuItem("Nu synchroniseren", null, (_, _) => SyncRequested?.Invoke()));
+        menu.Items.Add(new ToolStripMenuItem("Sync now", null, (_, _) => SyncRequested?.Invoke()));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autostartItem);
-        menu.Items.Add(new ToolStripMenuItem("Uitloggen en lokale gegevens wissen…", null, (_, _) => SignOutRequested?.Invoke()));
+        menu.Items.Add(new ToolStripMenuItem("Sign out and delete local data…", null, (_, _) => SignOutRequested?.Invoke()));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Afsluiten", null, (_, _) => ExitRequested?.Invoke()));
+        menu.Items.Add(new ToolStripMenuItem("Exit", null, (_, _) => ExitRequested?.Invoke()));
         menu.Opening += (_, _) => _autostartItem.Checked = AppSettings.StartWithWindows;
 
         _icon = new NotifyIcon { Icon = _image, Text = "BwQuick", ContextMenuStrip = menu, Visible = true };
@@ -45,7 +45,7 @@ internal sealed class TrayIcon : IDisposable
         };
     }
 
-    public void SetHotkeyLabel(string gesture) => _openItem.Text = $"Zoeken ({gesture})";
+    public void SetHotkeyLabel(string gesture) => _openItem.Text = $"Search ({gesture})";
 
     public void SetStatus(string text) => _icon.Text = text.Length > 120 ? text[..120] : text;
 

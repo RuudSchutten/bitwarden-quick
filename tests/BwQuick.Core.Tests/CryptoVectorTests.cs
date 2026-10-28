@@ -142,9 +142,9 @@ public class CryptoVectorTests
     [Fact]
     public void Secret_zeroes_on_dispose()
     {
-        var secret = Secret.FromChars("geheim".AsSpan());
+        var secret = Secret.FromChars("secret".AsSpan());
         var buffer = secret.Buffer;
-        Assert.Equal("geheim", Encoding.UTF8.GetString(secret.Span));
+        Assert.Equal("secret", Encoding.UTF8.GetString(secret.Span));
         secret.Dispose();
         Assert.All(buffer, b => Assert.Equal(0, b));
     }
