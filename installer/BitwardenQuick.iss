@@ -1,7 +1,10 @@
-; Per-user installer. Build with: iscc /DVersion=1.2.3 /DSourceDir=..\publish installer\BitwardenQuick.iss
+; Per-user installer. Build with: iscc /DVersion=1.2.3-beta.1 /DNumericVersion=1.2.3 /DSourceDir=..\publish installer\BitwardenQuick.iss
 
 #ifndef Version
   #define Version "0.0.0"
+#endif
+#ifndef NumericVersion
+  #define NumericVersion "0.0.0"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\publish"
@@ -13,7 +16,7 @@ AppName=BitwardenQuick
 AppVersion={#Version}
 AppVerName=BitwardenQuick {#Version}
 AppPublisher=Ruud Schutten
-VersionInfoVersion={#Version}
+VersionInfoVersion={#NumericVersion}
 DefaultDirName={localappdata}\Programs\BitwardenQuick
 DisableDirPage=yes
 DisableProgramGroupPage=yes

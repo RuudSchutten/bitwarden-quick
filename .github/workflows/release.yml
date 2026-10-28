@@ -65,7 +65,7 @@ jobs:
           }
           $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc "/DVersion=$env:VERSION" "/DSourceDir=$env:GITHUB_WORKSPACE\publish" installer\BitwardenQuick.iss
+          & $iscc "/DVersion=$env:VERSION" "/DNumericVersion=$($env:VERSION -replace '-.*$', '')" "/DSourceDir=$env:GITHUB_WORKSPACE\publish" installer\BitwardenQuick.iss
           if ($LASTEXITCODE -ne 0) { throw 'Building the installer failed.' }
 
       - name: Checksums
