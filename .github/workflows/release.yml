@@ -2,6 +2,7 @@ name: Release
 
 # Push a tag like v1.4.0 (or v1.4.0-beta.1 for a pre-release) to build, test and publish a GitHub release
 # with the installer and a portable zip. Run it by hand to only build and keep the files as a workflow artifact.
+# The files are signed with Azure Artifact Signing when the ARTIFACT_SIGNING_* and AZURE_* repository variables are set.
 on:
   push:
     tags: ['v*']
@@ -9,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -17,10 +19,12 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
+    environment: release
     timeout-minutes: 30
     env:
       DOTNET_NOLOGO: 'true'
       DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      SIGN: ${{ vars.ARTIFACT_SIGNING_ACCOUNT != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -49,6 +53,50 @@ jobs:
           dotnet publish src/BitwardenQuick -c Release -r win-x64 --self-contained false
           -p:PublishReadyToRun=true -p:RestoreLockedMode=true -p:Version=${{ env.VERSION }} -o publish
 
+      - name: Azure login
+        if: env.SIGN == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Signing tools
+        if: env.SIGN == 'true'
+        shell: pwsh
+        env:
+          ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          $tools = "$env:RUNNER_TEMP\signing"
+          $packages = @{ 'microsoft.windows.sdk.buildtools' = '10.0.26100.4188'; 'microsoft.artifactsigning.client' = '1.0.128' }
+          New-Item -ItemType Directory -Force $tools | Out-Null
+          foreach ($id in $packages.Keys) {
+            $version = $packages[$id]
+            Invoke-WebRequest "https://api.nuget.org/v3-flatcontainer/$id/$version/$id.$version.nupkg" -OutFile "$tools\$id.zip"
+            Expand-Archive "$tools\$id.zip" "$tools\$id"
+          }
+          $signtool = Get-ChildItem "$tools\microsoft.windows.sdk.buildtools" -Recurse -Filter signtool.exe | Where-Object FullName -like '*\x64\*' | Select-Object -First 1
+          $dlib = Get-ChildItem "$tools\microsoft.artifactsigning.client" -Recurse -Filter Azure.CodeSigning.Dlib.dll | Where-Object FullName -like '*\x64\*' | Select-Object -First 1
+          if (-not $signtool -or -not $dlib) { throw 'signtool.exe or Azure.CodeSigning.Dlib.dll not found.' }
+          @{ Endpoint = $env:ENDPOINT; CodeSigningAccountName = $env:ACCOUNT; CertificateProfileName = $env:PROFILE } |
+            ConvertTo-Json | Set-Content "$tools\metadata.json" -Encoding utf8
+          "SIGNTOOL=$($signtool.FullName)" >> $env:GITHUB_ENV
+          "SIGN_DLIB=$($dlib.FullName)" >> $env:GITHUB_ENV
+          "SIGN_METADATA=$tools\metadata.json" >> $env:GITHUB_ENV
+
+      - name: Sign
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $files = 'BitwardenQuick.exe', 'BitwardenQuick.dll', 'BitwardenQuick.Core.dll' | ForEach-Object { "publish\$_" }
+          & $env:SIGNTOOL sign /v /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib $env:SIGN_DLIB /dmdf $env:SIGN_METADATA @files
+          if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+          $files | ForEach-Object {
+            if ((Get-AuthenticodeSignature $_).Status -ne 'Valid') { throw "$_ has no valid signature." }
+          }
+
       - name: Portable zip
         shell: pwsh
         run: |
@@ -65,8 +113,18 @@ jobs:
           }
           $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc "/DVersion=$env:VERSION" "/DNumericVersion=$($env:VERSION -replace '-.*$', '')" "/DSourceDir=$env:GITHUB_WORKSPACE\publish" installer\BitwardenQuick.iss
+          $options = @("/DVersion=$env:VERSION", "/DNumericVersion=$($env:VERSION -replace '-.*$', '')", "/DSourceDir=$env:GITHUB_WORKSPACE\publish")
+          if ($env:SIGN -eq 'true') {
+            $options += '/DSign', ('/Ssigntool=$q' + $env:SIGNTOOL + '$q sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256' +
+              ' /dlib $q' + $env:SIGN_DLIB + '$q /dmdf $q' + $env:SIGN_METADATA + '$q $f')
+          }
+          & $iscc @options installer\BitwardenQuick.iss
           if ($LASTEXITCODE -ne 0) { throw 'Building the installer failed.' }
+          if ($env:SIGN -eq 'true') {
+            Get-ChildItem dist -Filter *-setup.exe | ForEach-Object {
+              if ((Get-AuthenticodeSignature $_.FullName).Status -ne 'Valid') { throw "$($_.Name) has no valid signature." }
+            }
+          }
 
       - name: Checksums
         shell: pwsh

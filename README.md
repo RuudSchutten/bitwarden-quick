@@ -33,7 +33,7 @@ Download `BitwardenQuick-<version>-setup.exe` from the latest GitHub release and
 Windows account only (no administrator rights) into `%LOCALAPPDATA%\Programs\BitwardenQuick`, and needs the
 [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64); setup says so when it is
 missing. Running setup again updates BitwardenQuick and keeps your data. The release also has a portable zip and
-`SHA256SUMS.txt`. The files are not code-signed, so Windows SmartScreen may ask you to confirm.
+`SHA256SUMS.txt`. The program files, setup and uninstaller are code-signed with Azure Artifact Signing.
 
 On first start BitwardenQuick asks for your region (bitwarden.com or bitwarden.eu), your personal API key
 (vault.bitwarden.com or vault.bitwarden.eu › Settings › Security › Keys › View API key) and your master password.
@@ -51,6 +51,22 @@ git push origin v1.4.0
 
 A tag with a suffix, such as `v1.4.0-beta.1`, becomes a pre-release. Running the workflow by hand only builds, and
 keeps the files as a workflow artifact.
+
+The workflow signs `BitwardenQuick.exe`, `BitwardenQuick.dll`, `BitwardenQuick.Core.dll`, the setup and the
+uninstaller with Azure Artifact Signing. It signs in to Azure with OpenID Connect and reads these repository
+variables; without `ARTIFACT_SIGNING_ACCOUNT` it builds unsigned files:
+
+| Variable | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | App registration with the *Artifact Signing Certificate Profile Signer* role and a federated credential for subject `repo:RuudSchutten/bitwarden-quick:environment:release` |
+| `AZURE_TENANT_ID` | Tenant of that app registration |
+| `ARTIFACT_SIGNING_ENDPOINT` | Endpoint of the signing account, such as `https://weu.codesigning.azure.net` |
+| `ARTIFACT_SIGNING_ACCOUNT` | Name of the signing account |
+| `ARTIFACT_SIGNING_PROFILE` | Name of the certificate profile |
+
+In Microsoft Defender for Endpoint, an administrator can allow the signing certificate once with a certificate
+indicator; every later release signed with it is then allowed too. Signing alone does not guarantee that, because
+reputation-based rules still look at how widespread and how old a file is.
 
 ## Build
 
